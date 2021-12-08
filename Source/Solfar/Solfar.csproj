@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net5.0</TargetFramework>
+    <RootNamespace>Solfar</RootNamespace>
+    <NoWarn>CS1998</NoWarn>
+    <Deterministic>true</Deterministic>
+    <Nullable>enable</Nullable>
+
+    <PackageId>Solfar</PackageId>
+    <Version>1.0</Version>
+    <Title>Solfar Skylounge</Title>
+    <Description>Solfar Skylounge Automation</Description>
+    <Copyright>Copyright (C) 2020-2021</Copyright>
+    <Authors>Bjorg</Authors>
+
+    <PackageLicenseExpression>AGPL-3.0-or-later</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/bjorg/Solfar</PackageProjectUrl>
+    <PackageTags>Solfar,Cineramax,Skylounge</PackageTags>
+    <PackageReadmeFile>ReadMe.md</PackageReadmeFile>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="5.0.0"/>
+    <PackageReference Include="RadiantPi.Lumagen" Version="1.1.*"/>
+    <PackageReference Include="RadiantPi.Sony.Cledis" Version="1.0.*"/>
+    <PackageReference Include="RadiantPi.Trinnov.Altitude" Version="1.0.*"/>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\..\ReadMe.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+</Project>
