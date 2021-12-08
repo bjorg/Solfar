@@ -40,7 +40,15 @@ namespace Solfar {
         }
 
         private static void ConfigureServices(IServiceCollection services)
-            => services .AddLogging(configure =>configure.AddConsole())
+            => services
+                .AddLogging(configure => configure
+                    .AddFilter("Default", LogLevel.Trace)
+                    .AddFilter("RadiantPi.Lumagen.RadianceProClient", LogLevel.Trace)
+                    .AddFilter("RadiantPi.Sony.Cledis.SonyCledisClient", LogLevel.Trace)
+                    .AddFilter("RadiantPi.Automation.AutomationController", LogLevel.Trace)
+                    .AddConsole()
+                )
+                .Configure<LoggerFilterOptions>(options => options.MinLevel = LogLevel.Trace)
                 .AddSingleton<IRadiancePro, RadianceProClient>()
                 .AddSingleton<ISonyCledis, SonyCledisClient>()
                 .AddSingleton<ITrinnovAltitude, TrinnovAltitudeClient>()
