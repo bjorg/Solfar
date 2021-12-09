@@ -1,11 +1,32 @@
+/*
+ * Solfar - Solfar Skylounge Automation
+ * Copyright (C) 2020-2021 - Steve G. Bjorg
+ *
+ * This program is free software: you can redistribute it and/or modify it
+ * under the terms of the GNU Affero General Public License as published by the
+ * Free Software Foundation, either version 3 of the License, or (at your option)
+ * any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+ * FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+ * details.
+ *
+ * You should have received a copy of the GNU Affero General Public License along
+ * with this program. If not, see <https://www.gnu.org/licenses/>.
+ */
+
 using System;
+using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using RadiantPi.Controller;
+using RadiantPi.Kaleidescape;
 using RadiantPi.Lumagen;
 using RadiantPi.Lumagen.Model;
 using RadiantPi.Sony.Cledis;
 using RadiantPi.Trinnov.Altitude;
+using TMDbLib.Client;
 
 namespace Solfar {
 
@@ -14,20 +35,27 @@ namespace Solfar {
         //--- Fields ---
         private IRadiancePro _radianceProClient;
         private ISonyCledis _cledisClient;
-        protected ITrinnovAltitude _trinnovClient;
+        private ITrinnovAltitude _trinnovClient;
+        private IKaleidescape _kaleidescapeClient;
+        private TMDbClient _movieDbClient;
         private RadianceProDisplayMode _radianceProDisplayMode = new();
         private AudioDecoderChangedEventArgs _altitudeAudioDecoder = new("", "");
+        private HighlightedSelectionChangedEventArgs _highlightedSelectionChangedEventArgs = new("");
 
         //--- Constructors ---
         public SolfarController(
             IRadiancePro radianceProClient,
             ISonyCledis cledisClient,
             ITrinnovAltitude altitudeClient,
+            IKaleidescape kaleidescapeClient,
+            TMDbClient movieDbClient,
             ILogger<SolfarController>? logger = null
         ) : base(logger) {
             _radianceProClient = radianceProClient ?? throw new ArgumentNullException(nameof(radianceProClient));
             _cledisClient = cledisClient ?? throw new ArgumentNullException(nameof(cledisClient));
             _trinnovClient = altitudeClient ?? throw new ArgumentNullException(nameof(altitudeClient));
+            _kaleidescapeClient = kaleidescapeClient ?? throw new ArgumentNullException(nameof(kaleidescapeClient));
+            _movieDbClient = movieDbClient ?? throw new ArgumentNullException(nameof(movieDbClient));
         }
 
         //--- Methods ---
@@ -35,12 +63,14 @@ namespace Solfar {
             await base.Start();
             _radianceProClient.DisplayModeChanged += EventListener;
             _trinnovClient.AudioDecoderChanged += EventListener;
+            _kaleidescapeClient.HighlightedSelectionChanged += EventListener;
             await _trinnovClient.ConnectAsync();
         }
 
         public override void Stop() {
             _trinnovClient.AudioDecoderChanged -= EventListener;
             _radianceProClient.DisplayModeChanged -= EventListener;
+            _kaleidescapeClient.HighlightedSelectionChanged -= EventListener;
             base.Stop();
         }
 
@@ -52,8 +82,11 @@ namespace Solfar {
             case AudioDecoderChangedEventArgs audioDecoderChangedEventArgs:
                 _altitudeAudioDecoder = audioDecoderChangedEventArgs;
                 return true;
+            case HighlightedSelectionChangedEventArgs highlightedSelectionChangedEventArgs:
+                _highlightedSelectionChangedEventArgs = highlightedSelectionChangedEventArgs;
+                return true;
             default:
-                Logger?.LogWarning($"unrecognized channel event: {args?.GetType().FullName}");
+                Logger?.LogWarning($"Unrecognized channel event: {args?.GetType().FullName}");
                 return false;
             }
         }
@@ -159,11 +192,36 @@ namespace Solfar {
 
                 // show message
                 if(decoder != "") {
+
+                    // clear menu in case it's shown
                     await _radianceProClient.SendAsync("!");
+
+                    // show decoder infomration with optional upmixer details
                     if(upmixer != "") {
                         await _radianceProClient.ShowMessageAsync($"{decoder} ({upmixer})", 2);
                     } else {
                         await _radianceProClient.ShowMessageAsync($"{decoder}", 2);
+                    }
+                }
+            });
+
+            // kaleidescape rules
+            OnValueChanged("Show Kaleidescape Selection Movie Score", _highlightedSelectionChangedEventArgs.SelectionId, async selectionId => {
+
+                // fetch details about selection
+                var details = await _kaleidescapeClient.GetContentDetailsAsync(selectionId);
+                if(!string.IsNullOrEmpty(details.Title) && int.TryParse(details.Year, out var year)) {
+
+                    // find movie on TheMovieD by title and year
+                    var searchResults = await _movieDbClient.SearchMovieAsync(details.Title, year: year);
+                    var first = searchResults.Results.FirstOrDefault();
+                    if(first is not null) {
+
+                        // clear menu in case it's shown
+                        await _radianceProClient.SendAsync("!");
+
+                        // show the movie score from TheMovieDB
+                        await _radianceProClient.ShowMessageAsync($"TheMovieDB: {first.VoteAverage:0.00} ({first.VoteCount:N0} votes)", 2);
                     }
                 }
             });
