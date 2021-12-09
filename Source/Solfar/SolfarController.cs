@@ -65,6 +65,7 @@ namespace Solfar {
             _trinnovClient.AudioDecoderChanged += EventListener;
             _kaleidescapeClient.HighlightedSelectionChanged += EventListener;
             await _trinnovClient.ConnectAsync();
+            await _kaleidescapeClient.ConnectAsync();
         }
 
         public override void Stop() {
