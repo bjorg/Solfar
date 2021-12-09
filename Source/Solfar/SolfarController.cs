@@ -32,6 +32,15 @@ namespace Solfar {
 
     public class SolfarController : AController {
 
+        //--- Class Methods ---
+        private static string PadBoth(string source, int length) {
+
+            // NOTE (2021-12-09, bjorg): taken from StackOverflow: https://stackoverflow.com/a/17590723
+            var spaces = length - source.Length;
+            var padLeft = (spaces / 2) + source.Length;
+            return source.PadLeft(padLeft).PadRight(length);
+        }
+
         //--- Fields ---
         private IRadiancePro _radianceProClient;
         private ISonyCledis _cledisClient;
@@ -222,8 +231,14 @@ namespace Solfar {
                         await _radianceProClient.SendAsync("!");
 
                         // show the movie score from TheMovieDB
-                        await _radianceProClient.ShowMessageAsync($"TheMovieDB: {first.VoteAverage:0.00} ({first.VoteCount:N0} votes)", 2);
+                        var firstLine = $"TheMovieDB: {first.VoteAverage:0.0} ({first.VoteCount:N0} votes)";
+                        var secondLine = $"{details.RunningTime} minutes [{details.Rating}]";
+                        await _radianceProClient.ShowMessageAsync(PadBoth(firstLine, 30) + PadBoth(secondLine, 30), 1);
+                    } else {
+                        await _radianceProClient.ClearMessageAsync();
                     }
+                } else {
+                    await _radianceProClient.ClearMessageAsync();
                 }
             });
         }
