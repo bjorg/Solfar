@@ -8,7 +8,7 @@
     <Nullable>enable</Nullable>
 
     <PackageId>Solfar</PackageId>
-    <Version>1.0</Version>
+    <Version>1.1</Version>
     <Title>Solfar Skylounge</Title>
     <Description>Solfar Skylounge Automation</Description>
     <Copyright>Copyright (C) 2020-2021</Copyright>
