@@ -6,7 +6,8 @@ This repository contains the automation for the Solfar Skylounge.
 1. Switch Sony C-LED display mode based on content being in SDR or HDR.
 1. Select RadiancePro memory based on content aspect ratio.
 1. Show active audio codec on screen.
-1. Show movie score from [TheMovieDB](https://www.themoviedb.org/) for Kaleidescape selection.
+1. Show Kaleidescape movie runtime and rating.
+1. Show Kaleidescape movie review score from [TheMovieDB](https://www.themoviedb.org/).
 
 ## License
 
