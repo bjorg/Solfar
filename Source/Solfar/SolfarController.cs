@@ -1,33 +1,73 @@
+/*
+ * Solfar - Solfar Skylounge Automation
+ * Copyright (C) 2020-2021 - Steve G. Bjorg
+ *
+ * This program is free software: you can redistribute it and/or modify it
+ * under the terms of the GNU Affero General Public License as published by the
+ * Free Software Foundation, either version 3 of the License, or (at your option)
+ * any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+ * FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+ * details.
+ *
+ * You should have received a copy of the GNU Affero General Public License along
+ * with this program. If not, see <https://www.gnu.org/licenses/>.
+ */
+
 using System;
+using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using RadiantPi.Controller;
+using RadiantPi.Kaleidescape;
 using RadiantPi.Lumagen;
 using RadiantPi.Lumagen.Model;
 using RadiantPi.Sony.Cledis;
 using RadiantPi.Trinnov.Altitude;
+using TMDbLib.Client;
 
 namespace Solfar {
 
     public class SolfarController : AController {
 
+        //--- Class Methods ---
+        private static string Center(string source, int length = 30) {
+            if(source.Length == 0) {
+                return "";
+            }
+
+            // NOTE (2021-12-09, bjorg): taken from StackOverflow: https://stackoverflow.com/a/17590723
+            var spaces = length - source.Length;
+            var padLeft = (spaces / 2) + source.Length;
+            return source.PadLeft(padLeft).PadRight(length);
+        }
+
         //--- Fields ---
         private IRadiancePro _radianceProClient;
         private ISonyCledis _cledisClient;
-        protected ITrinnovAltitude _trinnovClient;
+        private ITrinnovAltitude _trinnovClient;
+        private IKaleidescape _kaleidescapeClient;
+        private TMDbClient _movieDbClient;
         private RadianceProDisplayMode _radianceProDisplayMode = new();
         private AudioDecoderChangedEventArgs _altitudeAudioDecoder = new("", "");
+        private HighlightedSelectionChangedEventArgs _highlightedSelectionChangedEventArgs = new("");
 
         //--- Constructors ---
         public SolfarController(
             IRadiancePro radianceProClient,
             ISonyCledis cledisClient,
             ITrinnovAltitude altitudeClient,
+            IKaleidescape kaleidescapeClient,
+            TMDbClient movieDbClient,
             ILogger<SolfarController>? logger = null
         ) : base(logger) {
             _radianceProClient = radianceProClient ?? throw new ArgumentNullException(nameof(radianceProClient));
             _cledisClient = cledisClient ?? throw new ArgumentNullException(nameof(cledisClient));
             _trinnovClient = altitudeClient ?? throw new ArgumentNullException(nameof(altitudeClient));
+            _kaleidescapeClient = kaleidescapeClient ?? throw new ArgumentNullException(nameof(kaleidescapeClient));
+            _movieDbClient = movieDbClient ?? throw new ArgumentNullException(nameof(movieDbClient));
         }
 
         //--- Methods ---
@@ -35,12 +75,15 @@ namespace Solfar {
             await base.Start();
             _radianceProClient.DisplayModeChanged += EventListener;
             _trinnovClient.AudioDecoderChanged += EventListener;
+            _kaleidescapeClient.HighlightedSelectionChanged += EventListener;
             await _trinnovClient.ConnectAsync();
+            await _kaleidescapeClient.ConnectAsync();
         }
 
         public override void Stop() {
             _trinnovClient.AudioDecoderChanged -= EventListener;
             _radianceProClient.DisplayModeChanged -= EventListener;
+            _kaleidescapeClient.HighlightedSelectionChanged -= EventListener;
             base.Stop();
         }
 
@@ -52,8 +95,11 @@ namespace Solfar {
             case AudioDecoderChangedEventArgs audioDecoderChangedEventArgs:
                 _altitudeAudioDecoder = audioDecoderChangedEventArgs;
                 return true;
+            case HighlightedSelectionChangedEventArgs highlightedSelectionChangedEventArgs:
+                _highlightedSelectionChangedEventArgs = highlightedSelectionChangedEventArgs;
+                return true;
             default:
-                Logger?.LogWarning($"unrecognized channel event: {args?.GetType().FullName}");
+                Logger?.LogWarning($"Unrecognized channel event: {args?.GetType().FullName}");
                 return false;
             }
         }
@@ -159,14 +205,51 @@ namespace Solfar {
 
                 // show message
                 if(decoder != "") {
+
+                    // clear menu in case it's shown
                     await _radianceProClient.SendAsync("!");
-                    if(upmixer != "") {
-                        await _radianceProClient.ShowMessageAsync($"{decoder} ({upmixer})", 2);
-                    } else {
-                        await _radianceProClient.ShowMessageAsync($"{decoder}", 2);
-                    }
+
+                    // show decoder infomration with optional upmixer details
+                    var message = (upmixer.Length > 0)
+                        ? $"{decoder} ({upmixer})"
+                        : decoder;
+                    await _radianceProClient.ShowMessageAsync(Center(message), 2);
                 }
             });
+
+            // kaleidescape rules
+            OnValueChanged("Show Kaleidescape Selection", _highlightedSelectionChangedEventArgs.SelectionId, async selectionId => {
+                var details = await _kaleidescapeClient.GetContentDetailsAsync(selectionId);
+
+                // compose movies votes line from TheMovieDB
+                string movieVotesLine = "";
+                if(!string.IsNullOrEmpty(details.Title) && int.TryParse(details.Year, out var year)) {
+
+                    // find movie on TheMovieD by title and year
+                    var searchResults = await _movieDbClient.SearchMovieAsync(details.Title, year: year);
+                    var firstResult = searchResults.Results.FirstOrDefault();
+                    if(firstResult is not null) {
+
+                        // show the movie score from TheMovieDB
+                        movieVotesLine = $"TheMovieDB: {firstResult.VoteAverage:0.0} ({firstResult.VoteCount:N0} votes)";
+                    }
+                }
+
+                // compose movie information line
+                var movieInfoLine = string.IsNullOrEmpty(details.Rating)
+                    ? $"{details.RunningTime} minutes"
+                    : details.Rating.StartsWith("NR-", StringComparison.Ordinal)
+                    ? $"{details.RunningTime} minutes [{details.Rating.Substring(3)}]"
+                    : $"{details.RunningTime} minutes [{details.Rating}]";
+
+                // clear menu in case it's shown
+                await _radianceProClient.SendAsync("!");
+
+                // show combined lines
+                var text = Center(movieVotesLine) + Center(movieInfoLine);
+                await _radianceProClient.ShowMessageAsync(text, 1);
+            });
+
         }
     }
 }
