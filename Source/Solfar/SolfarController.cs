@@ -33,7 +33,7 @@ namespace Solfar {
     public class SolfarController : AController {
 
         //--- Class Methods ---
-        private static string Center(string source, int length) {
+        private static string Center(string source, int length = 30) {
             if(source.Length == 0) {
                 return "";
             }
@@ -210,11 +210,10 @@ namespace Solfar {
                     await _radianceProClient.SendAsync("!");
 
                     // show decoder infomration with optional upmixer details
-                    if(upmixer != "") {
-                        await _radianceProClient.ShowMessageAsync($"{decoder} ({upmixer})", 2);
-                    } else {
-                        await _radianceProClient.ShowMessageAsync($"{decoder}", 2);
-                    }
+                    var message = (upmixer.Length > 0)
+                        ? $"{decoder} ({upmixer})"
+                        : decoder;
+                    await _radianceProClient.ShowMessageAsync(Center(message), 2);
                 }
             });
 
@@ -247,7 +246,7 @@ namespace Solfar {
                 await _radianceProClient.SendAsync("!");
 
                 // show combined lines
-                var text = Center(movieVotesLine, 30) + Center(movieInfoLine, 30);
+                var text = Center(movieVotesLine) + Center(movieInfoLine);
                 await _radianceProClient.ShowMessageAsync(text, 1);
             });
 
