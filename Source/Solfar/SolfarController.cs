@@ -33,7 +33,10 @@ namespace Solfar {
     public class SolfarController : AController {
 
         //--- Class Methods ---
-        private static string PadBoth(string source, int length) {
+        private static string Center(string source, int length) {
+            if(source.Length == 0) {
+                return "";
+            }
 
             // NOTE (2021-12-09, bjorg): taken from StackOverflow: https://stackoverflow.com/a/17590723
             var spaces = length - source.Length;
@@ -216,31 +219,38 @@ namespace Solfar {
             });
 
             // kaleidescape rules
-            OnValueChanged("Show Kaleidescape Selection Movie Score", _highlightedSelectionChangedEventArgs.SelectionId, async selectionId => {
-
-                // fetch details about selection
+            OnValueChanged("Show Kaleidescape Selection", _highlightedSelectionChangedEventArgs.SelectionId, async selectionId => {
                 var details = await _kaleidescapeClient.GetContentDetailsAsync(selectionId);
+
+                // compose movies votes line from TheMovieDB
+                string movieVotesLine = "";
                 if(!string.IsNullOrEmpty(details.Title) && int.TryParse(details.Year, out var year)) {
 
                     // find movie on TheMovieD by title and year
                     var searchResults = await _movieDbClient.SearchMovieAsync(details.Title, year: year);
-                    var first = searchResults.Results.FirstOrDefault();
-                    if(first is not null) {
-
-                        // clear menu in case it's shown
-                        await _radianceProClient.SendAsync("!");
+                    var firstResult = searchResults.Results.FirstOrDefault();
+                    if(firstResult is not null) {
 
                         // show the movie score from TheMovieDB
-                        var firstLine = $"TheMovieDB: {first.VoteAverage:0.0} ({first.VoteCount:N0} votes)";
-                        var secondLine = $"{details.RunningTime} minutes [{details.Rating}]";
-                        await _radianceProClient.ShowMessageAsync(PadBoth(firstLine, 30) + PadBoth(secondLine, 30), 1);
-                    } else {
-                        await _radianceProClient.ClearMessageAsync();
+                        movieVotesLine = $"TheMovieDB: {firstResult.VoteAverage:0.0} ({firstResult.VoteCount:N0} votes)";
                     }
-                } else {
-                    await _radianceProClient.ClearMessageAsync();
                 }
+
+                // compose movie information line
+                var movieInfoLine = string.IsNullOrEmpty(details.Rating)
+                    ? $"{details.RunningTime} minutes"
+                    : details.Rating.StartsWith("NR-", StringComparison.Ordinal)
+                    ? $"{details.RunningTime} minutes [{details.Rating.Substring(3)}]"
+                    : $"{details.RunningTime} minutes [{details.Rating}]";
+
+                // clear menu in case it's shown
+                await _radianceProClient.SendAsync("!");
+
+                // show combined lines
+                var text = Center(movieVotesLine, 30) + Center(movieInfoLine, 30);
+                await _radianceProClient.ShowMessageAsync(text, 1);
             });
+
         }
     }
 }
