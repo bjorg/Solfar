@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net5.0</TargetFramework>
+    <TargetFramework>net6.0</TargetFramework>
     <RootNamespace>Solfar</RootNamespace>
     <NoWarn>CS1998</NoWarn>
     <Deterministic>true</Deterministic>
@@ -19,6 +19,12 @@
     <PackageTags>Solfar,Cineramax,Skylounge</PackageTags>
     <PackageReadmeFile>ReadMe.md</PackageReadmeFile>
   </PropertyGroup>
+  <ItemGroup>
+    <Using Include="System" />
+    <Using Include="System.Linq" />
+    <Using Include="System.Threading" />
+    <Using Include="System.Threading.Tasks" />
+  </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="5.0.0"/>
     <PackageReference Include="RadiantPi.Kaleidescape" Version="1.0.*" />
