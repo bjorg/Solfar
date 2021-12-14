@@ -23,8 +23,7 @@ using System.Threading.Channels;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 
-// TODO: rename to RadiantPi.Cortex
-namespace RadiantPi.Controller {
+namespace RadiantPi.Cortex {
 
     public abstract class AController {
 

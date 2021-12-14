@@ -21,7 +21,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using RadiantPi.Controller;
+using RadiantPi.Cortex;
 using RadiantPi.Kaleidescape;
 using RadiantPi.Lumagen;
 using RadiantPi.Lumagen.Model;
@@ -32,18 +32,6 @@ using TMDbLib.Client;
 namespace Solfar {
 
     public class SolfarController : AController {
-
-        //--- Class Methods ---
-        private static string Center(string source, int length = 30) {
-            if(source.Length == 0) {
-                return "";
-            }
-
-            // NOTE (2021-12-09, bjorg): taken from StackOverflow: https://stackoverflow.com/a/17590723
-            var spaces = length - source.Length;
-            var padLeft = (spaces / 2) + source.Length;
-            return source.PadLeft(padLeft).PadRight(length);
-        }
 
         //--- Fields ---
         private readonly IRadiancePro _radianceProClient;
@@ -221,7 +209,7 @@ namespace Solfar {
                     var message = (upmixer.Length > 0)
                         ? $"{decoder} ({upmixer})"
                         : decoder;
-                    await _radianceProClient.ShowMessageAsync(Center(message), 2);
+                    await _radianceProClient.ShowMessageCenteredAsync(message, 2);
                 }
             });
 
@@ -254,8 +242,7 @@ namespace Solfar {
                 await _radianceProClient.SendAsync("!");
 
                 // show combined lines
-                var text = Center(movieVotesLine) + Center(movieInfoLine);
-                await _radianceProClient.ShowMessageAsync(text, 1);
+                await _radianceProClient.ShowMessageCenteredAsync(movieVotesLine, movieInfoLine, 1);
             });
     }
 }
