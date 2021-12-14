@@ -18,6 +18,7 @@
 
 using System;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using RadiantPi.Controller;
@@ -45,14 +46,11 @@ namespace Solfar {
         }
 
         //--- Fields ---
-        private IRadiancePro _radianceProClient;
-        private ISonyCledis _cledisClient;
-        private ITrinnovAltitude _trinnovClient;
-        private IKaleidescape _kaleidescapeClient;
-        private TMDbClient _movieDbClient;
-        private RadianceProDisplayMode _radianceProDisplayMode = new();
-        private AudioDecoderChangedEventArgs _altitudeAudioDecoder = new("", "");
-        private HighlightedSelectionChangedEventArgs _highlightedSelectionChangedEventArgs = new("");
+        private readonly IRadiancePro _radianceProClient;
+        private readonly ISonyCledis _cledisClient;
+        private readonly ITrinnovAltitude _trinnovClient;
+        private readonly IKaleidescape _kaleidescapeClient;
+        private readonly TMDbClient _movieDbClient;
 
         //--- Constructors ---
         public SolfarController(
@@ -71,50 +69,59 @@ namespace Solfar {
         }
 
         //--- Methods ---
-        public override async Task Start() {
-            await base.Start();
+        protected override async Task Initialize(CancellationToken cancellationToken) {
+
+            // register all event listeners
             _radianceProClient.DisplayModeChanged += EventListener;
             _trinnovClient.AudioDecoderChanged += EventListener;
             _kaleidescapeClient.HighlightedSelectionChanged += EventListener;
-            await _trinnovClient.ConnectAsync();
-            await _kaleidescapeClient.ConnectAsync();
+
+            // initialize communication with devices
+            await _trinnovClient.ConnectAsync().ConfigureAwait(false);
+            await _kaleidescapeClient.ConnectAsync().ConfigureAwait(false);
         }
 
-        public override void Stop() {
+        protected override async Task Shutdown(CancellationToken cancellationToken) {
+
+            // remove all event listeners
             _trinnovClient.AudioDecoderChanged -= EventListener;
             _radianceProClient.DisplayModeChanged -= EventListener;
             _kaleidescapeClient.HighlightedSelectionChanged -= EventListener;
-            base.Stop();
+
+            // close device connection
+            _trinnovClient.Dispose();
+            _kaleidescapeClient.Dispose();
+            _radianceProClient.Dispose();
         }
 
-        protected override bool ApplyEvent(object? sender, EventArgs args) {
+        protected override async Task ProcessEventAsync(object? sender, EventArgs args, CancellationToken cancellationToken) {
             switch(args) {
             case DisplayModeChangedEventArgs displayModeChangedEventArgs:
-                _radianceProDisplayMode = displayModeChangedEventArgs.DisplayMode;
-                return true;
+                ProcessDisplayModeChange(displayModeChangedEventArgs.DisplayMode);
+                break;
             case AudioDecoderChangedEventArgs audioDecoderChangedEventArgs:
-                _altitudeAudioDecoder = audioDecoderChangedEventArgs;
-                return true;
+                ProcessAudioCodeChange(audioDecoderChangedEventArgs);
+                break;
             case HighlightedSelectionChangedEventArgs highlightedSelectionChangedEventArgs:
-                _highlightedSelectionChangedEventArgs = highlightedSelectionChangedEventArgs;
-                return true;
+                ProcessHighlightedSelectionChange(highlightedSelectionChangedEventArgs);
+                break;
             default:
                 Logger?.LogWarning($"Unrecognized channel event: {args?.GetType().FullName}");
-                return false;
+                break;
             }
         }
 
-        protected override void Evaluate() {
+        private void ProcessDisplayModeChange(RadianceProDisplayMode radianceProDisplayMode) {
 
             // display conditions
-            var fitHeight = LessThan(_radianceProDisplayMode.DetectedAspectRatio, "178");
-            var fitWidth = GreaterThanOrEqual(_radianceProDisplayMode.DetectedAspectRatio, "178")
-                && LessThanOrEqual(_radianceProDisplayMode.DetectedAspectRatio, "200");
-            var fitNative = GreaterThan(_radianceProDisplayMode.DetectedAspectRatio, "200");
-            var isHdr = _radianceProDisplayMode.SourceDynamicRange == RadianceProDynamicRange.HDR;
-            var is3D = (_radianceProDisplayMode.Source3DMode != RadiancePro3D.Undefined) && (_radianceProDisplayMode.Source3DMode != RadiancePro3D.Off);
-            var isGameSource = _radianceProDisplayMode.PhysicalInputSelected is 2 or 4 or 6 or 8;
-            var isGui = _radianceProDisplayMode.SourceVerticalRate == "050";
+            var fitHeight = LessThan(radianceProDisplayMode.DetectedAspectRatio, "178");
+            var fitWidth = GreaterThanOrEqual(radianceProDisplayMode.DetectedAspectRatio, "178")
+                && LessThanOrEqual(radianceProDisplayMode.DetectedAspectRatio, "200");
+            var fitNative = GreaterThan(radianceProDisplayMode.DetectedAspectRatio, "200");
+            var isHdr = radianceProDisplayMode.SourceDynamicRange == RadianceProDynamicRange.HDR;
+            var is3D = (radianceProDisplayMode.Source3DMode != RadiancePro3D.Undefined) && (radianceProDisplayMode.Source3DMode != RadiancePro3D.Off);
+            var isGameSource = radianceProDisplayMode.PhysicalInputSelected is 2 or 4 or 6 or 8;
+            var isGui = radianceProDisplayMode.SourceVerticalRate == "050";
 
             // display rules
             OnTrue("Switch to 2D", !is3D, async () => {
@@ -140,9 +147,10 @@ namespace Solfar {
             OnTrue("Fit Native", !is3D && !isGameSource && fitNative && !isGui, async () => {
                 await _radianceProClient.SelectMemoryAsync(RadianceProMemory.MemoryA);
             });
+        }
 
-            // audio rules
-            OnValueChanged("Show Audio Codec", (Decoder: _altitudeAudioDecoder.Decoder, Upmixer: _altitudeAudioDecoder.Upmixer), async state => {
+        private void ProcessAudioCodeChange(AudioDecoderChangedEventArgs altitudeAudioDecoder)
+            => OnValueChanged("Show Audio Codec", (Decoder: altitudeAudioDecoder.Decoder, Upmixer: altitudeAudioDecoder.Upmixer), async state => {
 
                 // determine value for upmixer message
                 var upmixer = state.Upmixer;
@@ -217,8 +225,8 @@ namespace Solfar {
                 }
             });
 
-            // kaleidescape rules
-            OnValueChanged("Show Kaleidescape Selection", _highlightedSelectionChangedEventArgs.SelectionId, async selectionId => {
+        private void ProcessHighlightedSelectionChange(HighlightedSelectionChangedEventArgs highlightedSelectionChangedEventArgs)
+            => OnValueChanged("Show Kaleidescape Selection", highlightedSelectionChangedEventArgs.SelectionId, async selectionId => {
                 var details = await _kaleidescapeClient.GetContentDetailsAsync(selectionId);
 
                 // compose movies votes line from TheMovieDB
@@ -249,7 +257,5 @@ namespace Solfar {
                 var text = Center(movieVotesLine) + Center(movieInfoLine);
                 await _radianceProClient.ShowMessageAsync(text, 1);
             });
-
-        }
     }
 }

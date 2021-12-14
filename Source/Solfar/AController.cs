@@ -18,10 +18,12 @@
 
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 
+// TODO: rename to RadiantPi.Cortex
 namespace RadiantPi.Controller {
 
     public abstract class AController {
@@ -36,7 +38,6 @@ namespace RadiantPi.Controller {
         //--- Fields ---
         private Dictionary<string, object> _rules = new();
         private Channel<(object? Sender, EventArgs EventArgs)> _channel = Channel.CreateUnbounded<(object? Sender, EventArgs EventArgs)>();
-        private TaskCompletionSource _taskCompletionSource = new();
         private List<(string Name, Func<object, Task> Action, object State)> _triggered = new();
 
         //--- Constructors ---
@@ -46,45 +47,33 @@ namespace RadiantPi.Controller {
         protected ILogger? Logger { get; }
 
         //--- Abstract Methods ---
-        protected abstract bool ApplyEvent(object? sender, EventArgs change);
-        protected abstract void Evaluate();
+        protected abstract Task ProcessEventAsync(object? sender, EventArgs args, CancellationToken cancellationToken);
 
         //--- Methods ---
-        public virtual void EventListener(object? sender, EventArgs args) => _channel.Writer.TryWrite((Sender: sender, EventArgs: args));
+        public virtual async Task Run(CancellationToken cancellationToken = default) {
 
-        public virtual Task Start() {
-            Task.Run((Func<Task>)(async () => {
+            // kick-off channel received as a background thread
+            var runner = Task.Run(() => ChannelReceiverAsync(cancellationToken));
 
-                // process all changes in the channel
-                await foreach(var change in _channel.Reader.ReadAllAsync()) {
-                    if(ApplyEvent(change.Sender, change.EventArgs)) {
-                        await EvaluateChangeAsync().ConfigureAwait(false);
-                    }
-                }
+            // initialize controller
+            await Initialize(cancellationToken).ConfigureAwait(false);
 
-                // signal the orchestrator is done
-                _taskCompletionSource.SetResult();
-            }));
-            return Task.CompletedTask;
+            // wait until the event channel is closed
+            await runner.ConfigureAwait(false);
+
+            // shutdown the controller
+            await Shutdown(cancellationToken).ConfigureAwait(false);
         }
 
-        public virtual void Stop() => _channel.Writer.Complete();
-        public virtual Task WaitAsync() => _taskCompletionSource.Task;
+        public virtual void Close() => _channel.Writer.Complete();
 
-        protected virtual async Task EvaluateChangeAsync() {
-            _triggered.Clear();
-            Logger?.LogDebug($"Evaluating changes");
-            Evaluate();
-            Logger?.LogDebug($"Triggered {_triggered.Count:N0} rules to execute");
-            foreach(var triggered in _triggered) {
-                Logger?.LogInformation($"Executing rule '{triggered.Name}'");
-                try {
-                    await triggered.Action(triggered.State).ConfigureAwait(false);
-                } catch(Exception e) {
-                    Logger?.LogError(e, $"Exception while executing rule '{triggered.Name}'");
-                }
-            }
+        protected virtual void EventListener(object? sender, EventArgs args) {
+            Logger?.LogTrace($"{nameof(EventListener)}: (Sender='{sender?.GetType().FullName ?? "<null>"}', Args='{args?.GetType().FullName ?? "<null>"}')");
+            _channel.Writer.TryWrite((Sender: sender, EventArgs: args!));
         }
+
+        protected virtual Task Initialize(CancellationToken cancellationToken) => Task.CompletedTask;
+        protected virtual Task Shutdown(CancellationToken cancellationToken) => Task.CompletedTask;
 
         protected virtual void OnTrue(string name, bool condition, Func<Task> callback)
             => OnCondition(name, condition, (oldState, newState) => newState && !oldState, _ => callback());
@@ -103,6 +92,8 @@ namespace RadiantPi.Controller {
             // check if this rule is being seen for the first time
             if(_rules.TryGetValue(name, out var oldState)) {
                 try {
+
+                    // check if the state change triggered an action
                     if(condition((T)oldState, newState)) {
                         Logger?.LogDebug($"Trigger rule '{name}': {oldState} --> {newState}");
                         _triggered.Add((Name: name, Action: state => callback((T)state), State: (object)newState));
@@ -118,6 +109,40 @@ namespace RadiantPi.Controller {
 
             // record current condition state
             _rules[name] = newState;
+        }
+
+        private async Task ChannelReceiverAsync(CancellationToken cancellationToken) {
+
+            // process all changes in the channel
+            await foreach(var change in _channel.Reader.ReadAllAsync(cancellationToken).WithCancellation(cancellationToken)) {
+                _triggered.Clear();
+
+                // evaluate event
+                try {
+                    Logger?.LogDebug($"Evaluating event");
+                    await ProcessEventAsync(change.Sender, change.EventArgs, cancellationToken).ConfigureAwait(false);
+                    Logger?.LogDebug($"Triggered {_triggered.Count:N0} rules to execute");
+                } catch(Exception e) {
+                    Logger?.LogError(e, "Exception while processing event");
+                }
+
+                // execute triggered rules
+                try {
+                    foreach(var triggered in _triggered) {
+                        cancellationToken.ThrowIfCancellationRequested();
+                        Logger?.LogInformation($"Executing rule '{triggered.Name}'");
+                        try {
+
+                            // triggered actions are expected to be short; therefore, they don't take a cancellation token
+                            await triggered.Action(triggered.State).ConfigureAwait(false);
+                        } catch(Exception e) {
+                            Logger?.LogError(e, $"Exception while executing rule '{triggered.Name}'");
+                        }
+                    }
+                } catch(Exception e) {
+                    Logger?.LogError(e, "Exception while executing rules");
+                }
+            }
         }
     }
 }

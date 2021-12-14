@@ -45,7 +45,7 @@ namespace Solfar {
                 return;
             }
 
-            // initialize services
+            // initialize services with device configurations
             var services = new ServiceCollection()
                 .AddSingleton(services => new RadianceProClientConfig {
                     PortName = "/dev/ttyUSB0",
@@ -65,18 +65,16 @@ namespace Solfar {
                     DeviceId = kPlayerDeviceId
                 })
                 .AddSingleton(services => new TMDbClient(movieDbApiKey));
-            ConfigureServices(services);
-            using(var serviceProvider = services.BuildServiceProvider()) {
-                var controller = serviceProvider.GetRequiredService<SolfarController>();
-                _ = Task.Run(() => {
-                    Console.ReadLine();
-                    controller.Stop();
-                });
-                await controller.Start();
 
-                // wait until orchestrator finishes
-                await controller.WaitAsync();
-            }
+            // launch controller
+            ConfigureServices(services);
+            using var serviceProvider = services.BuildServiceProvider();
+            var controller = serviceProvider.GetRequiredService<SolfarController>();
+            _ = Task.Run(() => {
+                Console.ReadLine();
+                controller.Close();
+            });
+            await controller.Run();
         }
 
         private static void ConfigureServices(IServiceCollection services)
