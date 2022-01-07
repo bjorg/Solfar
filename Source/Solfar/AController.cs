@@ -89,8 +89,9 @@ namespace RadiantPi.Cortex {
             }
 
             // check if this rule is being seen for the first time
-            if(_rules.TryGetValue(name, out var oldState)) {
-                try {
+            object? oldState = null;
+            try {
+                if(_rules.TryGetValue(name, out oldState)) {
 
                     // check if the state change triggered an action
                     if(condition((T)oldState, newState)) {
@@ -99,15 +100,15 @@ namespace RadiantPi.Cortex {
                     } else {
                         Logger?.LogDebug($"Ignore rule '{name}': {oldState} --> {newState}");
                     }
-                } catch(Exception e) {
-                    Logger?.LogError(e, $"Exception while evaluating rule condition '{name}' (new state: {newState}, old state: {oldState})");
+                } else {
+                    Logger?.LogDebug($"Set rule '{name}' state for the first time (state: {newState})");
                 }
-            } else {
-                Logger?.LogDebug($"Set rule '{name}' state for the first time (state: {newState})");
-            }
 
-            // record current condition state
-            _rules[name] = newState;
+                // record current condition state
+                _rules[name] = newState;
+            } catch(Exception e) {
+                Logger?.LogError(e, $"Exception while evaluating rule condition '{name}' (new state: {newState}, old state: {oldState ?? "<null>"})");
+            }
         }
 
         private async Task ChannelReceiverAsync(CancellationToken cancellationToken) {
