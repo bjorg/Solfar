@@ -108,7 +108,7 @@ public class SolfarController : AController {
         var isAppleTv = radianceProDisplayMode.PhysicalInputSelected is 1;
         var isOppo = radianceProDisplayMode.PhysicalInputSelected is 3;
         var isKaleidescape = radianceProDisplayMode.PhysicalInputSelected is 5;
-        var isHtpc = radianceProDisplayMode.PhysicalInputSelected is 2 or 4 or 6 or 8;
+        var isHtpc = radianceProDisplayMode.PhysicalInputSelected is 2;
 
         // select video input
         OnTrue("Switch to Lumagen 2D", !isHtpc && !is3D, async () => {
