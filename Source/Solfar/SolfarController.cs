@@ -63,6 +63,9 @@ public class SolfarController : AController {
         // initialize communication with devices
         await _trinnovClient.ConnectAsync().ConfigureAwait(false);
         await _kaleidescapeClient.ConnectAsync().ConfigureAwait(false);
+
+        // fetch current RadiancePro settings (they are not automatically provided otherwise)
+        await _radianceProClient.GetDisplayModeAsync().ConfigureAwait(false);
     }
 
     protected override async Task Shutdown(CancellationToken cancellationToken) {
