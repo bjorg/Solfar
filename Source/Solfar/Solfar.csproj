@@ -29,7 +29,7 @@
     <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="6.0.0" />
     <PackageReference Include="RadiantPi.Kaleidescape" Version="2.0.0" />
     <PackageReference Include="RadiantPi.Lumagen" Version="1.1.0" />
-    <PackageReference Include="RadiantPi.Sony.Cledis" Version="2.0.1" />
+    <PackageReference Include="RadiantPi.Sony.Cledis" Version="2.1" />
     <PackageReference Include="RadiantPi.Trinnov.Altitude" Version="2.2.0" />
     <PackageReference Include="TMDbLib" Version="1.8.1" />
   </ItemGroup>
