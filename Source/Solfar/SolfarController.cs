@@ -105,8 +105,8 @@ public class SolfarController : AController {
         var isHdr = radianceProDisplayMode.SourceDynamicRange == RadianceProDynamicRange.HDR;
         var is3D = (radianceProDisplayMode.Source3DMode != RadiancePro3D.Undefined) && (radianceProDisplayMode.Source3DMode != RadiancePro3D.Off);
         var isGui = radianceProDisplayMode.SourceVerticalRate == "050";
-        var isAppleTv = radianceProDisplayMode.PhysicalInputSelected is 1;
-        var isOppo = radianceProDisplayMode.PhysicalInputSelected is 3;
+        var isOppo = radianceProDisplayMode.PhysicalInputSelected is 1;
+        var isAppleTv = radianceProDisplayMode.PhysicalInputSelected is 3;
         var isKaleidescape = radianceProDisplayMode.PhysicalInputSelected is 5;
         var isHtpc = radianceProDisplayMode.PhysicalInputSelected is 2;
 
