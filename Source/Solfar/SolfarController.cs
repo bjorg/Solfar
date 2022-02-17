@@ -104,31 +104,57 @@ public class SolfarController : AController {
         var fitNative = GreaterThan(radianceProDisplayMode.DetectedAspectRatio, "200");
         var isHdr = radianceProDisplayMode.SourceDynamicRange == RadianceProDynamicRange.HDR;
         var is3D = (radianceProDisplayMode.Source3DMode != RadiancePro3D.Undefined) && (radianceProDisplayMode.Source3DMode != RadiancePro3D.Off);
-        var isGameSource = radianceProDisplayMode.PhysicalInputSelected is 2 or 4 or 6 or 8;
         var isGui = radianceProDisplayMode.SourceVerticalRate == "050";
+        var isAppleTv = radianceProDisplayMode.PhysicalInputSelected is 1;
+        var isOppo = radianceProDisplayMode.PhysicalInputSelected is 3;
+        var isKaleidescape = radianceProDisplayMode.PhysicalInputSelected is 5;
+        var isHtpc = radianceProDisplayMode.PhysicalInputSelected is 2 or 4 or 6 or 8;
 
-        // display rules
-        OnTrue("Switch to 2D", !is3D, async () => {
+        // select video input
+        OnTrue("Switch to Lumagen 2D", !isHtpc && !is3D, async () => {
             await _cledisClient.SetInputAsync(SonyCledisInput.Hdmi1);
         });
-        OnTrue("Switch to 3D", is3D, async () => {
+        OnTrue("Switch to Lumagen 3D", !isHtpc && is3D, async () => {
             await _cledisClient.SetInputAsync(SonyCledisInput.Hdmi2);
             await _cledisClient.SetPictureModeAsync(SonyCledisPictureMode.Mode3);
             await _radianceProClient.SelectMemoryAsync(RadianceProMemory.MemoryA);
         });
-        OnTrue("Switch to SDR", !is3D && !isHdr, async () => {
+        OnTrue("Switch to HTPC", isHtpc, async () => {
+            await _cledisClient.SetInputAsync(SonyCledisInput.DisplayPortBoth);
+        });
+
+        // select audio input
+        OnTrue("Switch to Lumagen Audio Output", !isHtpc && !isKaleidescape && !isOppo, async () => {
+            await _trinnovClient.SelectProfileAsync(TrinnovAltitudeProfile.Hdmi7);
+        });
+        OnTrue("Switch to HTPC Audio Output", isHtpc, async () => {
+            await _trinnovClient.SelectProfileAsync(TrinnovAltitudeProfile.Hdmi6);
+        });
+        OnTrue("Switch to Kaleidescape Output", isKaleidescape, async () => {
+            await _trinnovClient.SelectProfileAsync(TrinnovAltitudeProfile.Hdmi5);
+        });
+        OnTrue("Switch to Oppo Output", isOppo, async () => {
+
+            // TODO: switch between "Auto" and "Auro-3D"
+            await _trinnovClient.SelectProfileAsync(TrinnovAltitudeProfile.Hdmi4);
+        });
+
+        // select display brightness
+        OnTrue("Switch to SDR", !isHtpc && !is3D && !isHdr, async () => {
             await _cledisClient.SetPictureModeAsync(SonyCledisPictureMode.Mode1);
         });
-        OnTrue("Switch to HDR", !is3D && isHdr, async () => {
+        OnTrue("Switch to HDR", !isHtpc && !is3D && isHdr, async () => {
             await _cledisClient.SetPictureModeAsync(SonyCledisPictureMode.Mode2);
         });
-        OnTrue("Fit Height", !is3D && !isGameSource && (fitHeight || isGui), async () => {
+
+        // select video processor aspect-ratio
+        OnTrue("Fit Height", !isHtpc && !is3D && (fitHeight || isGui), async () => {
             await _radianceProClient.SelectMemoryAsync(RadianceProMemory.MemoryC);
         });
-        OnTrue("Fit Width", !is3D && !isGameSource && fitWidth && !isGui, async () => {
+        OnTrue("Fit Width", !isHtpc && !is3D && fitWidth && !isGui, async () => {
             await _radianceProClient.SelectMemoryAsync(RadianceProMemory.MemoryB);
         });
-        OnTrue("Fit Native", !is3D && !isGameSource && fitNative && !isGui, async () => {
+        OnTrue("Fit Native", !isHtpc && !is3D && fitNative && !isGui, async () => {
             await _radianceProClient.SelectMemoryAsync(RadianceProMemory.MemoryA);
         });
     }
