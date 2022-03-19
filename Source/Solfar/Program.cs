@@ -85,6 +85,7 @@ public static class Program {
                 .AddFilter("RadiantPi.Trinnov.Altitude.TrinnovAltitudeClient", LogLevel.Trace)
                 .AddFilter("RadiantPi.Automation.AutomationController", LogLevel.Trace)
                 .AddConsole()
+                .AddFile("Logs/Solfar-{Date}.log")
             )
             .Configure<LoggerFilterOptions>(options => options.MinLevel = LogLevel.Trace)
             .AddSingleton<IKaleidescape, KaleidescapeClient>()
