@@ -45,24 +45,24 @@ public static class Program {
 
         // initialize services with device configurations
         var services = new ServiceCollection()
-            .AddSingleton(services => new RadianceProClientConfig {
+            .AddSingleton(_ => new RadianceProClientConfig {
                 PortName = "/dev/ttyUSB0",
                 BaudRate = 9600
             })
-            .AddSingleton(services => new SonyCledisClientConfig {
+            .AddSingleton(_ => new SonyCledisClientConfig {
                 Host = "192.168.1.190",
                 Port = 53595
             })
-            .AddSingleton(services => new TrinnovAltitudeClientConfig {
+            .AddSingleton(_ => new TrinnovAltitudeClientConfig {
                 Host = "192.168.1.180",
                 Port = 44100
             })
-            .AddSingleton(services => new KaleidescapeClientConfig {
+            .AddSingleton(_ => new KaleidescapeClientConfig {
                 Host = "192.168.1.147",
                 Port = 10000,
                 DeviceId = kPlayerDeviceId
             })
-            .AddSingleton(services => new TMDbClient(movieDbApiKey));
+            .AddSingleton(_ => new TMDbClient(movieDbApiKey));
 
         // launch controller
         ConfigureServices(services);
