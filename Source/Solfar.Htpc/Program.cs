@@ -13,7 +13,7 @@ builder.Services
 
 var app = builder.Build();
 app.MapGet("/", GetStatusAsync);
-app.MapPost("/Go4K", SwitchTo4KAsync);
+app.MapPost("/Go2D", SwitchTo2DAsync);
 app.MapPost("/Go3D", SwitchTo3DAsync);
 app.Run();
 
@@ -42,8 +42,8 @@ async Task<HtmlDoc> GetStatusAsync(ISonyCledis cledisClient, ILogger<Program>? l
         .End();
 }
 
-async Task<string> SwitchTo4KAsync(HttpContext contenxt, ISonyCledis cledisClient, ILogger<Program>? logger) {
-    logger?.LogInformation($"{nameof(SwitchTo4KAsync)} called");
+async Task<string> SwitchTo2DAsync(HttpContext contenxt, ISonyCledis cledisClient, ILogger<Program>? logger) {
+    logger?.LogInformation($"{nameof(SwitchTo2DAsync)} called");
 
     // check if Sony C-LED is turned on
     var power = await cledisClient.GetPowerStatusAsync();
@@ -71,12 +71,12 @@ async Task<string> SwitchTo4KAsync(HttpContext contenxt, ISonyCledis cledisClien
 
         // switch Sony C-LED to 2D mode
         await cledisClient.Set2D3DModeAsync(SonyCledis2D3DMode.Mode2D);
-        await Task.Delay(TimeSpan.FromSeconds(10));
+        await Task.Delay(TimeSpan.FromSeconds(15));
     }
 
     // activate NVidia 4K surround mode
     await SwitchSurroundProfile("configs/surround-4K.cfg", logger);
-    logger?.LogInformation($"{nameof(SwitchTo4KAsync)} finished");
+    logger?.LogInformation($"{nameof(SwitchTo2DAsync)} finished");
     return "Ok";
 }
 
@@ -109,7 +109,7 @@ async Task<string> SwitchTo3DAsync(HttpContext contenxt, ISonyCledis cledisClien
 
         // switch Sony C-LED to 3D mode
         await cledisClient.Set2D3DModeAsync(SonyCledis2D3DMode.Mode3D);
-        await Task.Delay(TimeSpan.FromSeconds(10));
+        await Task.Delay(TimeSpan.FromSeconds(15));
     }
 
     // activate NVidia 3D surround mode

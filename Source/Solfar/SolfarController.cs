@@ -117,7 +117,7 @@ public class SolfarController : AController {
         var isAppleTv = radianceProDisplayMode.PhysicalInputSelected is 3;
         var isKaleidescape = radianceProDisplayMode.PhysicalInputSelected is 5;
         var isHtpc2D = radianceProDisplayMode.PhysicalInputSelected is 2;
-        var isHtpc3D = radianceProDisplayMode.PhysicalInputSelected is 4;
+        var isHtpc3D = radianceProDisplayMode.PhysicalInputSelected is 7; // TODO: should be 4, 7 is NVIDIA Shield
 
         // select video input
         OnTrue("Switch to Lumagen 2D", !isHtpc2D && !isHtpc3D && !is3D, async () => {
@@ -131,7 +131,7 @@ public class SolfarController : AController {
         OnTrue("Switch to HTPC 2D", isHtpc2D, async () => {
             await _cledisClient.SetInputAsync(SonyCledisInput.DisplayPortBoth);
             await Task.Delay(TimeSpan.FromSeconds(5));
-            await _httpClient.PostAsync("http://192.168.0.236:5158/Go4K", content: null);
+            await _httpClient.PostAsync("http://192.168.0.236:5158/Go2D", content: null);
         });
         OnTrue("Switch to HTPC 3D", isHtpc3D, async () => {
             await _cledisClient.SetInputAsync(SonyCledisInput.DisplayPortBoth);
