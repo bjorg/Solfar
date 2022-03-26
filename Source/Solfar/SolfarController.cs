@@ -16,6 +16,8 @@
  * with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
+namespace Solfar;
+
 using Microsoft.Extensions.Logging;
 using RadiantPi.Cortex;
 using RadiantPi.Kaleidescape;
@@ -25,8 +27,6 @@ using RadiantPi.Sony.Cledis;
 using RadiantPi.Trinnov.Altitude;
 using TMDbLib.Client;
 
-namespace Solfar;
-
 public class SolfarController : AController {
 
     //--- Fields ---
@@ -35,6 +35,7 @@ public class SolfarController : AController {
     private readonly ITrinnovAltitude _trinnovClient;
     private readonly IKaleidescape _kaleidescapeClient;
     private readonly TMDbClient _movieDbClient;
+    private readonly HttpClient _httpClient;
 
     //--- Constructors ---
     public SolfarController(
@@ -43,6 +44,7 @@ public class SolfarController : AController {
         ITrinnovAltitude altitudeClient,
         IKaleidescape kaleidescapeClient,
         TMDbClient movieDbClient,
+        HttpClient httpClient,
         ILogger<SolfarController>? logger = null
     ) : base(logger) {
         _radianceProClient = radianceProClient ?? throw new ArgumentNullException(nameof(radianceProClient));
@@ -50,6 +52,7 @@ public class SolfarController : AController {
         _trinnovClient = altitudeClient ?? throw new ArgumentNullException(nameof(altitudeClient));
         _kaleidescapeClient = kaleidescapeClient ?? throw new ArgumentNullException(nameof(kaleidescapeClient));
         _movieDbClient = movieDbClient ?? throw new ArgumentNullException(nameof(movieDbClient));
+        _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
     }
 
     //--- Methods ---
@@ -66,6 +69,8 @@ public class SolfarController : AController {
 
         // fetch current RadiancePro settings (they are not automatically provided otherwise)
         await _radianceProClient.GetDisplayModeAsync().ConfigureAwait(false);
+
+        // TODO: add periodic check for C-LED temperature and fan control
     }
 
     protected override async Task Shutdown(CancellationToken cancellationToken) {
@@ -111,26 +116,34 @@ public class SolfarController : AController {
         var isOppo = radianceProDisplayMode.PhysicalInputSelected is 1;
         var isAppleTv = radianceProDisplayMode.PhysicalInputSelected is 3;
         var isKaleidescape = radianceProDisplayMode.PhysicalInputSelected is 5;
-        var isHtpc = radianceProDisplayMode.PhysicalInputSelected is 2;
+        var isHtpc2D = radianceProDisplayMode.PhysicalInputSelected is 2;
+        var isHtpc3D = radianceProDisplayMode.PhysicalInputSelected is 7; // TODO: should be 4, 7 is NVIDIA Shield
 
         // select video input
-        OnTrue("Switch to Lumagen 2D", !isHtpc && !is3D, async () => {
+        OnTrue("Switch to Lumagen 2D", !isHtpc2D && !isHtpc3D && !is3D, async () => {
             await _cledisClient.SetInputAsync(SonyCledisInput.Hdmi1);
         });
-        OnTrue("Switch to Lumagen 3D", !isHtpc && is3D, async () => {
+        OnTrue("Switch to Lumagen 3D", !isHtpc2D && !isHtpc3D && is3D, async () => {
             await _cledisClient.SetInputAsync(SonyCledisInput.Hdmi2);
             await _cledisClient.SetPictureModeAsync(SonyCledisPictureMode.Mode3);
             await _radianceProClient.SelectMemoryAsync(RadianceProMemory.MemoryA);
         });
-        OnTrue("Switch to HTPC", isHtpc, async () => {
+        OnTrue("Switch to HTPC 2D", isHtpc2D, async () => {
             await _cledisClient.SetInputAsync(SonyCledisInput.DisplayPortBoth);
+            await Task.Delay(TimeSpan.FromSeconds(5));
+            await _httpClient.PostAsync("http://192.168.0.236:5158/Go2D", content: null);
+        });
+        OnTrue("Switch to HTPC 3D", isHtpc3D, async () => {
+            await _cledisClient.SetInputAsync(SonyCledisInput.DisplayPortBoth);
+            await Task.Delay(TimeSpan.FromSeconds(5));
+            await _httpClient.PostAsync("http://192.168.0.236:5158/Go3D", content: null);
         });
 
         // select audio input
-        OnTrue("Switch to Lumagen Audio Output", !isHtpc && !isKaleidescape && !isOppo, async () => {
+        OnTrue("Switch to Lumagen Audio Output", !isHtpc2D && !isHtpc3D && !isKaleidescape && !isOppo, async () => {
             await _trinnovClient.SelectProfileAsync(TrinnovAltitudeProfile.Hdmi7);
         });
-        OnTrue("Switch to HTPC Audio Output", isHtpc, async () => {
+        OnTrue("Switch to HTPC Audio Output", isHtpc2D || isHtpc3D, async () => {
             await _trinnovClient.SelectProfileAsync(TrinnovAltitudeProfile.Hdmi6);
         });
         OnTrue("Switch to Kaleidescape Output", isKaleidescape, async () => {
@@ -143,21 +156,21 @@ public class SolfarController : AController {
         });
 
         // select display brightness
-        OnTrue("Switch to SDR", !isHtpc && !is3D && !isHdr, async () => {
+        OnTrue("Switch to SDR", !isHtpc2D && !isHtpc3D && !is3D && !isHdr, async () => {
             await _cledisClient.SetPictureModeAsync(SonyCledisPictureMode.Mode1);
         });
-        OnTrue("Switch to HDR", !isHtpc && !is3D && isHdr, async () => {
+        OnTrue("Switch to HDR", !isHtpc2D && !isHtpc3D && !is3D && isHdr, async () => {
             await _cledisClient.SetPictureModeAsync(SonyCledisPictureMode.Mode2);
         });
 
         // select video processor aspect-ratio
-        OnTrue("Fit Height", !isHtpc && !is3D && (fitHeight || isGui), async () => {
+        OnTrue("Fit Height", !isHtpc2D && !isHtpc3D && !is3D && (fitHeight || isGui), async () => {
             await _radianceProClient.SelectMemoryAsync(RadianceProMemory.MemoryC);
         });
-        OnTrue("Fit Width", !isHtpc && !is3D && fitWidth && !isGui, async () => {
+        OnTrue("Fit Width", !isHtpc2D && !isHtpc3D && !is3D && fitWidth && !isGui, async () => {
             await _radianceProClient.SelectMemoryAsync(RadianceProMemory.MemoryB);
         });
-        OnTrue("Fit Native", !isHtpc && !is3D && fitNative && !isGui, async () => {
+        OnTrue("Fit Native", !isHtpc2D && !isHtpc3D && !is3D && fitNative && !isGui, async () => {
             await _radianceProClient.SelectMemoryAsync(RadianceProMemory.MemoryA);
         });
     }
