@@ -11,7 +11,4 @@
     <PackageReference Include="RadiantPi.Sony.Cledis" Version="2.2" />
     <PackageReference Include="Serilog.Extensions.Logging.File" Version="2.0.0" />
   </ItemGroup>
-  <ItemGroup>
-    <ProjectReference Include="../../../HtmlDoc/Source/HtmlDocument/HtmlDocument.csproj" />
-  </ItemGroup>
 </Project>
