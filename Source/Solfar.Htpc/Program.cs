@@ -63,14 +63,15 @@ async Task<string> SwitchTo4KAsync(HttpContext contenxt, ISonyCledis cledisClien
 
     // check if Sony C-LED 3D mode is enabled
     var mode2D3D = await cledisClient.Get2D3DModeAsync();
-    if(mode2D3D == SonyCledis2D3DMode.Select3D) {
+    if(mode2D3D == SonyCledis2D3DMode.Mode3D) {
 
         // NOTE: need to switch NVidia surround mode off before toggling Sony C-LED 3D mode
         await SwitchSurroundProfile("configs/individual-3D.cfg", logger);
+        await Task.Delay(TimeSpan.FromSeconds(5));
 
         // switch Sony C-LED to 2D mode
-        await cledisClient.Set2D3DModeAsync(SonyCledis2D3DMode.Select2D);
-        await Task.Delay(TimeSpan.FromSeconds(5));
+        await cledisClient.Set2D3DModeAsync(SonyCledis2D3DMode.Mode2D);
+        await Task.Delay(TimeSpan.FromSeconds(10));
     }
 
     // activate NVidia 4K surround mode
@@ -100,19 +101,20 @@ async Task<string> SwitchTo3DAsync(HttpContext contenxt, ISonyCledis cledisClien
 
     // check if Sony C-LED 2D mode is enabled
     var mode2D3D = await cledisClient.Get2D3DModeAsync();
-    if(mode2D3D == SonyCledis2D3DMode.Select2D) {
+    if(mode2D3D == SonyCledis2D3DMode.Mode2D) {
 
         // NOTE: need to switch NVidia surround mode off before toggling Sony C-LED 3D mode
         await SwitchSurroundProfile("configs/individual-4xHD.cfg", logger);
+        await Task.Delay(TimeSpan.FromSeconds(5));
 
         // switch Sony C-LED to 3D mode
-        await cledisClient.Set2D3DModeAsync(SonyCledis2D3DMode.Select3D);
-        await Task.Delay(TimeSpan.FromSeconds(5));
+        await cledisClient.Set2D3DModeAsync(SonyCledis2D3DMode.Mode3D);
+        await Task.Delay(TimeSpan.FromSeconds(10));
     }
 
     // activate NVidia 3D surround mode
     await SwitchSurroundProfile("configs/surround-3D.cfg",  logger);
-    logger?.LogInformation($"{nameof(SwitchTo4KAsync)} finished");
+    logger?.LogInformation($"{nameof(SwitchTo3DAsync)} finished");
     return "Ok";
 }
 
