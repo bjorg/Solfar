@@ -62,7 +62,8 @@ public static class Program {
                 Port = 10000,
                 DeviceId = kPlayerDeviceId
             })
-            .AddSingleton(_ => new TMDbClient(movieDbApiKey));
+            .AddSingleton(_ => new TMDbClient(movieDbApiKey))
+            .AddSingleton(_ => new HttpClient());
 
         // launch controller
         ConfigureServices(services);
