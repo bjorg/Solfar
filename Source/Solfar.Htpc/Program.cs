@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using HtmlDocument;
 using RadiantPi.Sony.Cledis;
 
@@ -57,20 +58,20 @@ async Task<string> SwitchTo4KAsync(HttpContext contenxt, ISonyCledis cledisClien
         return $"Sony C-LED active input is not Dual-DispayPort (current: {input})";
     }
 
-    // check 3D-4K mode is disabled
-    var dualDisplayPort3DMode = await cledisClient.GetDualDisplayPort3D4KModeAsync();
-    if(dualDisplayPort3DMode != SonyCledisDualDisplayPort3D4KMode.Off) {
+    // check if Sony C-LED 3D mode is enabled
+    var mode2D3D = await cledisClient.Get2D3DModeAsync();
+    if(mode2D3D == SonyCledis2D3DMode.Select3D) {
 
-        // TODO: disable NVidia surround mode
+        // NOTE: need to switch NVidia surround mode off before toggling Sony C-LED 3D mode
+        await SwitchSurroundProfile("configs/individual-3D.cfg");
 
-        // disable Sony C-LED 4K-3D mode
-        await cledisClient.SetDualDisplayPort3D4KModeAsync(SonyCledisDualDisplayPort3D4KMode.Off);
-
-        // TODO: reactivate HDMI audio output
+        // switch Sony C-LED to 2D mode
+        await cledisClient.Set2D3DModeAsync(SonyCledis2D3DMode.Select2D);
+        await Task.Delay(TimeSpan.FromSeconds(5));
     }
 
-    // 4. Is NVidia Surround 4K profile active?
-    //  NO => Activate NVidia Surround 4K profile
+    // activate NVidia 4K surround mode
+    await SwitchSurroundProfile("configs/surround-4K.cfg");
     return "Ok";
 }
 
@@ -88,19 +89,36 @@ async Task<string> SwitchTo3DAsync(HttpContext contenxt, ISonyCledis cledisClien
         return $"Sony C-LED active input is not Dual-DispayPort (current: {input})";
     }
 
-    // check 3D-4K mode is enabled
-    var dualDisplayPort3DMode = await cledisClient.GetDualDisplayPort3D4KModeAsync();
-    if(dualDisplayPort3DMode != SonyCledisDualDisplayPort3D4KMode.On) {
+    // check if Sony C-LED 2D mode is enabled
+    var mode2D3D = await cledisClient.Get2D3DModeAsync();
+    if(mode2D3D == SonyCledis2D3DMode.Select2D) {
 
-        // TODO: disable NVidia surround mode
+        // NOTE: need to switch NVidia surround mode off before toggling Sony C-LED 3D mode
+        await SwitchSurroundProfile("configs/individual-4xHD.cfg");
 
-        // enable Sony C-LED 4K-3D mode
-        await cledisClient.SetDualDisplayPort3D4KModeAsync(SonyCledisDualDisplayPort3D4KMode.Off);
-
-        // TODO: reactivate HDMI audio output
+        // switch Sony C-LED to 3D mode
+        await cledisClient.Set2D3DModeAsync(SonyCledis2D3DMode.Select3D);
+        await Task.Delay(TimeSpan.FromSeconds(5));
     }
 
-    // 4. Is NVidia Surround 3D profile active?
-    //  NO => Activate NVidia Surround 3D profile
+    // activate NVidia 3D surround mode
+    await SwitchSurroundProfile("configs/surround-3D.cfg");
     return "Ok";
+}
+
+async Task SwitchSurroundProfile(string profile) {
+    using var process = Process.Start(new ProcessStartInfo() {
+        FileName = @"C:\Projects\NVIDIAInfo-v1.7.0\NVIDIAInfo.exe",
+        Arguments = $"load \"{profile}\"",
+        WindowStyle = ProcessWindowStyle.Hidden,
+        CreateNoWindow = true
+    });
+    if(process is not null) {
+        await process.WaitForExitAsync();
+        if(process.ExitCode != 0) {
+            Console.WriteLine($"WARNING: {nameof(SwitchSurroundProfile)} - exited with code: {process.ExitCode}");
+        }
+    } else {
+        Console.WriteLine($"ERROR: {nameof(SwitchSurroundProfile)} - unable to start process");
+    }
 }
