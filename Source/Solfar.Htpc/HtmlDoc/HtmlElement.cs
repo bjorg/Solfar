@@ -29,6 +29,8 @@ public class HtmlElement<TOuter> : AHtmlNode, IHtmlNode where TOuter : class {
     public TOuter End() => Parent;
     public HtmlElement<TOuter> Elem(string name, string text) => Begin(name).Value(text).End();
 
+    public HtmlElement<TOuter> Build(Func<HtmlElement<TOuter>, HtmlElement<TOuter>> builder) => builder(this);
+
     public HtmlElement<TOuter> Value(string text) {
         AddChild(new HtmlText(this, text));
         return this;
