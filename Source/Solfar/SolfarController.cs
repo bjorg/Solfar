@@ -117,7 +117,7 @@ public class SolfarController : AController {
         var isAppleTv = radianceProDisplayMode.PhysicalInputSelected is 3;
         var isKaleidescape = radianceProDisplayMode.PhysicalInputSelected is 5;
         var isHtpc2D = radianceProDisplayMode.PhysicalInputSelected is 2;
-        var isHtpc3D = radianceProDisplayMode.PhysicalInputSelected is 7; // TODO: should be 4, 7 is NVIDIA Shield
+        var isHtpc3D = radianceProDisplayMode.PhysicalInputSelected is 4;
 
         // select video input
         OnTrue("Switch to Lumagen 2D", !isHtpc2D && !isHtpc3D && !is3D, async () => {
