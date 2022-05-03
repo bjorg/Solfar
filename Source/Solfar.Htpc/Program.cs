@@ -1,21 +1,117 @@
-using System.Diagnostics;
-using HtmlDocument;
-using RadiantPi.Sony.Cledis;
+/*
+ * Solfar - Solfar Skylounge Automation
+ * Copyright (C) 2020-2022 - Steve G. Bjorg
+ *
+ * This program is free software: you can redistribute it and/or modify it
+ * under the terms of the GNU Affero General Public License as published by the
+ * Free Software Foundation, either version 3 of the License, or (at your option)
+ * any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+ * FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+ * details.
+ *
+ * You should have received a copy of the GNU Affero General Public License along
+ * with this program. If not, see <https://www.gnu.org/licenses/>.
+ */
 
+using HtmlDocument;
+using RadiantPi.Kaleidescape;
+using RadiantPi.Lumagen;
+using RadiantPi.Sony.Cledis;
+using RadiantPi.Trinnov.Altitude;
+using Solfar;
+using TMDbLib.Client;
+
+// read sensitive configuration information from environment variables
+var kPlayerDeviceId = Environment.GetEnvironmentVariable("KPLAYER_SERIAL_NUMBER");
+if(string.IsNullOrEmpty(kPlayerDeviceId)) {
+    Console.WriteLine("ERROR: environment variable KPLAYER_SERIAL_NUMBER is not set");
+    return;
+}
+var movieDbApiKey = Environment.GetEnvironmentVariable("TMDB_APIKEY");
+if(string.IsNullOrEmpty(movieDbApiKey)) {
+    Console.WriteLine("ERROR: environment variable TMDB_APIKEY is not set");
+    return;
+}
+
+// create and configure services
 var builder = WebApplication.CreateBuilder(args);
 builder.Services
+
+    // configure logging
+    .AddLogging(configure => configure
+        .AddFilter("Default", LogLevel.Trace)
+        .AddFilter("RadiantPi.Kaleidescape.KaleidescapeClient", LogLevel.Trace)
+        .AddFilter("RadiantPi.Lumagen.RadianceProClient", LogLevel.Trace)
+        .AddFilter("RadiantPi.Sony.Cledis.SonyCledisClient", LogLevel.Trace)
+        .AddFilter("RadiantPi.Trinnov.Altitude.TrinnovAltitudeClient", LogLevel.Trace)
+        .AddFilter("RadiantPi.Automation.AutomationController", LogLevel.Trace)
+        .AddConsole()
+        .AddFile("Logs/Solfar-{Date}.log", LogLevel.Trace)
+    )
+    .Configure<LoggerFilterOptions>(options => options.MinLevel = LogLevel.Trace)
+
+    // Sony Cledis client configuration
     .AddSingleton(_ => new SonyCledisClientConfig {
         Host = "192.168.1.190",
         Port = 53595
     })
     .AddSingleton<ISonyCledis, SonyCledisClient>()
-    .Configure<LoggerFilterOptions>(options => options.MinLevel = LogLevel.Trace);
 
+    // Lumagen RadiancePro client configuration
+    .AddSingleton(_ => new RadianceProClientConfig {
+        PortName = "COM3",
+        BaudRate = 9600
+    })
+    .AddSingleton<IRadiancePro, RadianceProClient>()
+
+    // Trinnov Altitude client configuration
+    .AddSingleton(_ => new TrinnovAltitudeClientConfig {
+        Host = "192.168.1.180",
+        Port = 44100
+    })
+    .AddSingleton<ITrinnovAltitude, TrinnovAltitudeClient>()
+
+    // Kaleidescape client configuration
+    .AddSingleton(_ => new KaleidescapeClientConfig {
+        Host = "192.168.1.147",
+        Port = 10000,
+        DeviceId = kPlayerDeviceId
+    })
+    .AddSingleton<IKaleidescape, KaleidescapeClient>()
+
+    // TheMovieDatabase client configuration
+    .AddSingleton(_ => new TMDbClient(movieDbApiKey))
+
+    // HTTP client configuration
+    .AddSingleton(_ => new HttpClient())
+
+    // add Solfer controller
+    .AddSingleton<SolfarController>();
+
+// launch web API endpoint
 var app = builder.Build();
 app.MapGet("/", GetStatusAsync);
-app.MapPost("/Go2D", SwitchTo2DAsync);
-app.MapPost("/Go3D", SwitchTo3DAsync);
-app.Run();
+var appTask = app.RunAsync();
+
+// launch Solfar controller
+var controller = app.Services.GetRequiredService<SolfarController>();
+var controllerTask = controller.RunAsync();
+
+// close web API and Solfar controller
+_ = Task.Run(() => {
+    Console.ReadLine();
+    controller.Close();
+    app.StopAsync();
+});
+
+// wait until both are done
+await Task.WhenAll(new[] {
+    controllerTask,
+    appTask
+});
 
 async Task<HtmlDoc> GetStatusAsync(ISonyCledis cledisClient, ILogger<Program>? logger) {
     logger?.LogInformation($"{nameof(GetStatusAsync)} called");
@@ -80,172 +176,4 @@ body {
                 .End()
             .End()
         .End();
-}
-
-async Task<string> SwitchTo2DAsync(HttpContext contenxt, ISonyCledis cledisClient, ILogger<Program>? logger) {
-    logger?.LogInformation($"{nameof(SwitchTo2DAsync)} called");
-    var response = "Ok";
-
-    // check if Sony C-LED is turned on
-    var power = await cledisClient.GetPowerStatusAsync();
-    if(power != SonyCledisPowerStatus.On) {
-        response = $"Sony C-LED is not on (current: {power})";
-        goto done;
-    }
-
-    // check if Dual-DisplayPort is the active input
-    var input = await cledisClient.GetInputAsync();
-    if(input != SonyCledisInput.DisplayPortBoth) {
-        response = $"Sony C-LED active input is not Dual-DispayPort (current: {input})";
-        goto done;
-    }
-
-    // check current display status
-    var displayStatus = DisplayApi.GetCurrentDisplayStatus();
-    switch(displayStatus.NVidiaMode) {
-    default:
-    case NVidiaMode.Undefined:
-        response = $"HTPC NVidia display mode could not be identified (mode: {displayStatus.NVidiaMode})";
-        break;
-    case NVidiaMode.Disabled:
-        response = $"HTPC NVidia adapter has not displays attached";
-        break;
-    case NVidiaMode.Surround3D:
-        logger?.LogInformation($"Disabling NVIDIA 3D surround mode");
-
-        // NOTE: need to switch NVidia surround mode off before toggling Sony C-LED 3D mode
-        await SwitchNVidiaSurroundProfileAsync("configs/individual-3D.cfg", logger);
-        await Task.Delay(TimeSpan.FromSeconds(5));
-        goto case NVidiaMode.Individual3DTiles;
-    case NVidiaMode.Individual3DTiles:
-        logger?.LogInformation($"Disabling Sony C-LED 3D mode");
-
-        // switch Sony C-LED to 2D mode
-        await cledisClient.Set2D3DModeAsync(SonyCledis2D3DMode.Mode2D);
-        await Task.Delay(TimeSpan.FromSeconds(15));
-        goto case NVidiaMode.IndividualHdTiles;
-    case NVidiaMode.IndividualHdTiles:
-        logger?.LogInformation($"Enabling NVIDIA 4K surround mode");
-
-        // activate NVidia 4K surround mode
-        await SwitchNVidiaSurroundProfileAsync("configs/surround-4K.cfg", logger);
-        await Task.Delay(TimeSpan.FromSeconds(5));
-        goto case NVidiaMode.Surround4K;
-    case NVidiaMode.Surround4K:
-
-        // nothing to do
-        break;
-    }
-
-    // check if audio needs to be enabled
-    displayStatus = DisplayApi.GetCurrentDisplayStatus();
-    if(!displayStatus.AudioEnabled) {
-        logger?.LogInformation($"Enabling 4K display profile");
-        await SwitchMonitorProfileAsync("4K", logger);
-    }
-done:
-    logger?.LogInformation($"RESPONSE: {response}");
-    return response;
-}
-
-async Task<string> SwitchTo3DAsync(HttpContext contenxt, ISonyCledis cledisClient, ILogger<Program>? logger) {
-    logger?.LogInformation($"{nameof(SwitchTo3DAsync)} called");
-    var response = "Ok";
-
-    // check if Sony C-LED is turned on
-    var power = await cledisClient.GetPowerStatusAsync();
-    if(power != SonyCledisPowerStatus.On) {
-        response = $"Sony C-LED is not on (current: {power})";
-        goto done;
-    }
-
-    // check if Dual-DisplayPort is the active input
-    var input = await cledisClient.GetInputAsync();
-    if(input != SonyCledisInput.DisplayPortBoth) {
-        response = $"Sony C-LED active input is not Dual-DispayPort (current: {input})";
-        goto done;
-    }
-
-    // check current display status
-    var displayStatus = DisplayApi.GetCurrentDisplayStatus();
-    switch(displayStatus.NVidiaMode) {
-    default:
-    case NVidiaMode.Undefined:
-        response = $"HTPC NVidia display mode could not be identified (mode: {displayStatus.NVidiaMode})";
-        break;
-    case NVidiaMode.Disabled:
-        response = $"HTPC NVidia adapter has not displays attached";
-        break;
-    case NVidiaMode.Surround4K:
-        logger?.LogInformation($"Disabling NVIDIA 4K surround mode");
-
-        // NOTE: need to switch NVidia surround mode off before toggling Sony C-LED 3D mode
-        await SwitchNVidiaSurroundProfileAsync("configs/individual-4xHD.cfg", logger);
-        await Task.Delay(TimeSpan.FromSeconds(5));
-        goto case NVidiaMode.IndividualHdTiles;
-    case NVidiaMode.IndividualHdTiles:
-        logger?.LogInformation($"Enabling Sony C-LED 3D mode");
-
-        // switch Sony C-LED to 3D mode
-        await cledisClient.Set2D3DModeAsync(SonyCledis2D3DMode.Mode3D);
-        await Task.Delay(TimeSpan.FromSeconds(15));
-        goto case NVidiaMode.Individual3DTiles;
-    case NVidiaMode.Individual3DTiles:
-        logger?.LogInformation($"Enabling NVIDIA 3D surround mode");
-
-        // activate NVidia 3D surround mode
-        await SwitchNVidiaSurroundProfileAsync("configs/surround-3D.cfg",  logger);
-        await Task.Delay(TimeSpan.FromSeconds(5));
-        goto case NVidiaMode.Surround3D;
-    case NVidiaMode.Surround3D:
-
-        // nothing to do
-        break;
-    }
-
-    // check if audio needs to be enabled
-    displayStatus = DisplayApi.GetCurrentDisplayStatus();
-    if(!displayStatus.AudioEnabled) {
-        logger?.LogInformation($"Enabling 3D display profile");
-        await SwitchMonitorProfileAsync("3D", logger);
-    }
-done:
-    logger?.LogInformation($"RESPONSE: {response}");
-    return response;
-}
-
-async Task SwitchNVidiaSurroundProfileAsync(string profile, ILogger? logger) {
-    logger?.LogInformation($"Switch NVidia surround profile: {profile}");
-    using var process = Process.Start(new ProcessStartInfo() {
-        FileName = @"C:\Projects\NVIDIAInfo-v1.7.0\NVIDIAInfo.exe",
-        Arguments = $"load \"{profile}\"",
-        WindowStyle = ProcessWindowStyle.Hidden,
-        CreateNoWindow = true
-    });
-    if(process is not null) {
-        await process.WaitForExitAsync();
-        if(process.ExitCode != 0) {
-            logger?.LogWarning($"{nameof(SwitchNVidiaSurroundProfileAsync)}: exited with code: {process.ExitCode}");
-        }
-    } else {
-        logger?.LogError($"{nameof(SwitchNVidiaSurroundProfileAsync)}: unable to start process");
-    }
-}
-
-async Task SwitchMonitorProfileAsync(string profile, ILogger? logger) {
-    logger?.LogInformation($"Switch monitor profile: {profile}");
-    using var process = Process.Start(new ProcessStartInfo() {
-        FileName = @"C:\Program Files (x86)\DisplayFusion\DisplayFusionCommand.exe",
-        Arguments = $"-monitorloadprofile \"{profile}\"",
-        WindowStyle = ProcessWindowStyle.Hidden,
-        CreateNoWindow = true
-    });
-    if(process is not null) {
-        await process.WaitForExitAsync();
-        if(process.ExitCode != 0) {
-            logger?.LogWarning($"{nameof(SwitchMonitorProfileAsync)}: exited with code: {process.ExitCode}");
-        }
-    } else {
-        logger?.LogError($"{nameof(SwitchMonitorProfileAsync)}: unable to start process");
-    }
 }
