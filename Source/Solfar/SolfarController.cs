@@ -116,6 +116,7 @@ public class SolfarController : AController {
         var isOppo = radianceProDisplayMode.PhysicalInputSelected is 1;
         var isAppleTv = radianceProDisplayMode.PhysicalInputSelected is 3;
         var isKaleidescape = radianceProDisplayMode.PhysicalInputSelected is 5;
+        var isNVidiaTV = radianceProDisplayMode.PhysicalInputSelected is 7;
         var isHtpc2D = radianceProDisplayMode.PhysicalInputSelected is 2;
         var isHtpc3D = radianceProDisplayMode.PhysicalInputSelected is 4;
 
@@ -243,7 +244,7 @@ public class SolfarController : AController {
                 // clear menu in case it's shown
                 await _radianceProClient.SendAsync("!");
 
-                // show decoder infomration with optional upmixer details
+                // show decoder information with optional upmixer details
                 var message = (upmixer.Length > 0)
                     ? $"{decoder} ({upmixer})"
                     : decoder;
@@ -260,7 +261,10 @@ public class SolfarController : AController {
             if(!string.IsNullOrEmpty(details.Title) && int.TryParse(details.Year, out var year)) {
 
                 // find movie on TheMovieD by title and year
+
+                // TODO: add timeout
                 var searchResults = await _movieDbClient.SearchMovieAsync(details.Title, year: year);
+
                 var firstResult = searchResults.Results.FirstOrDefault();
                 if(firstResult is not null) {
 
