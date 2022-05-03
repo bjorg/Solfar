@@ -262,7 +262,7 @@ public class SolfarController : AController {
             string movieVotesLine = "";
             if(!string.IsNullOrEmpty(details.Title) && int.TryParse(details.Year, out var year)) {
 
-                // find movie on TheMovieD by title and year
+                // find movie on TheMovieDB by title and year
 
                 // TODO: add timeout
                 var searchResults = await _movieDbClient.SearchMovieAsync(details.Title, year: year);
