@@ -133,13 +133,12 @@ public class SolfarController : AController {
         OnTrue("Switch to HTPC 2D", isHtpc2D, async () => {
             await _cledisClient.SetInputAsync(SonyCledisInput.DisplayPortBoth);
             await Task.Delay(TimeSpan.FromSeconds(5));
-            await _httpClient.PostAsync("http://192.168.0.236:5158/Go2D", content: null);
+            await SwitchTo2DAsync();
         });
         OnTrue("Switch to HTPC 3D", isHtpc3D, async () => {
             await _cledisClient.SetInputAsync(SonyCledisInput.DisplayPortBoth);
             await Task.Delay(TimeSpan.FromSeconds(5));
             await SwitchTo3DAsync();
-            await _httpClient.PostAsync("http://192.168.0.236:5158/Go3D", content: null);
         });
 
         // select audio input
