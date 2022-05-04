@@ -19,6 +19,7 @@
 namespace Solfar;
 
 using System.Diagnostics;
+using System.Runtime.Caching;
 using Microsoft.Extensions.Logging;
 using RadiantPi.Cortex;
 using RadiantPi.Kaleidescape;
@@ -27,6 +28,7 @@ using RadiantPi.Lumagen.Model;
 using RadiantPi.Sony.Cledis;
 using RadiantPi.Trinnov.Altitude;
 using TMDbLib.Client;
+using TMDbLib.Objects.Search;
 
 public class SolfarController : AController {
 
@@ -37,6 +39,7 @@ public class SolfarController : AController {
     private readonly IKaleidescape _kaleidescapeClient;
     private readonly TMDbClient _movieDbClient;
     private readonly HttpClient _httpClient;
+    private readonly MemoryCache _cache = new("TheMovieDB");
 
     //--- Constructors ---
     public SolfarController(
@@ -112,7 +115,7 @@ public class SolfarController : AController {
             && LessThanOrEqual(radianceProDisplayMode.DetectedAspectRatio, "200");
         var fitNative = GreaterThan(radianceProDisplayMode.DetectedAspectRatio, "200");
         var isHdr = radianceProDisplayMode.SourceDynamicRange == RadianceProDynamicRange.HDR;
-        var is3D = (radianceProDisplayMode.Source3DMode != RadiancePro3D.Undefined) && (radianceProDisplayMode.Source3DMode != RadiancePro3D.Off);
+        var is3D = radianceProDisplayMode.Source3DMode is RadiancePro3D.FrameSequential or RadiancePro3D.FramePacked or RadiancePro3D.TopBottom or RadiancePro3D.SideBySide;
         var isGui = radianceProDisplayMode.SourceVerticalRate == "050";
         var isOppo = radianceProDisplayMode.PhysicalInputSelected is 1;
         var isAppleTv = radianceProDisplayMode.PhysicalInputSelected is 3;
@@ -249,7 +252,7 @@ public class SolfarController : AController {
                 var message = (upmixer.Length > 0)
                     ? $"{decoder} ({upmixer})"
                     : decoder;
-                await _radianceProClient.ShowMessageCenteredAsync(message, 2);
+                await _radianceProClient.ShowMessageCenteredAsync(message, "", 2);
             }
         });
 
@@ -257,35 +260,47 @@ public class SolfarController : AController {
         => OnValueChanged("Show Kaleidescape Selection", highlightedSelectionChangedEventArgs.SelectionId, async selectionId => {
             var details = await _kaleidescapeClient.GetContentDetailsAsync(selectionId);
 
+            // "---------|---------|---------|"
+            // "Score: 9.9 - 999 mins [PG-13] "
+            // "---------|---------|---------|"
+
             // compose movies votes line from TheMovieDB
-            string movieVotesLine = "";
+            string movieScore = "";
             if(!string.IsNullOrEmpty(details.Title) && int.TryParse(details.Year, out var year)) {
 
-                // find movie on TheMovieDB by title and year
+                // find movie on TheMovieDB by title and year, if it's not in the cache already
+                var result = (SearchMovie?)_cache[selectionId];
+                if(result is null) {
 
-                // TODO: add timeout
-                var searchResults = await _movieDbClient.SearchMovieAsync(details.Title, year: year);
+                    // TODO: add timeout to search request
+                    var searchResults = await _movieDbClient.SearchMovieAsync(details.Title, year: year);
 
-                var firstResult = searchResults.Results.FirstOrDefault();
-                if(firstResult is not null) {
+                    result = searchResults.Results.FirstOrDefault();
+                    _cache.Add(selectionId, result ?? new SearchMovie(), DateTimeOffset.UtcNow.AddHours(24));
+                }
+                if(result?.Title is not null) {
 
                     // show the movie score from TheMovieDB
-                    movieVotesLine = $"TheMovieDB: {firstResult.VoteAverage:0.0} ({firstResult.VoteCount:N0} votes)";
+                    movieScore = $"Score: {result.VoteAverage:0.0} - ";
                 }
             }
 
             // compose movie information line
-            var movieInfoLine = string.IsNullOrEmpty(details.Rating)
-                ? $"{details.RunningTime} minutes"
-                : details.Rating.StartsWith("NR-", StringComparison.Ordinal)
-                ? $"{details.RunningTime} minutes [{details.Rating.Substring(3)}]"
-                : $"{details.RunningTime} minutes [{details.Rating}]";
+            var movieInfo = string.IsNullOrEmpty(details.Rating)
+                ? $"{details.RunningTime} mins"
+                : $"{details.RunningTime} mins [{TrimNRPrefix(details.Rating)}]";
 
             // clear menu in case it's shown
             await _radianceProClient.SendAsync("!");
 
             // show combined lines
-            await _radianceProClient.ShowMessageCenteredAsync(movieVotesLine, movieInfoLine, 1);
+            await _radianceProClient.ShowMessageCenteredAsync(movieScore + movieInfo, "", 1);
+
+            // local functions
+            string TrimNRPrefix(string rating)
+                => rating.StartsWith("NR-", StringComparison.Ordinal)
+                    ? rating.Substring(3)
+                    : rating;
         });
 
 

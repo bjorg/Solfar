@@ -23,9 +23,6 @@ namespace RadiantPi.Lumagen {
     public static class IRadianceProEx {
 
         //--- Class Methods ---
-        public static Task ShowMessageCenteredAsync(this IRadiancePro client, string message, int delay)
-            => ShowMessageCenteredAsync(client, message, "", delay);
-
         public static Task ShowMessageCenteredAsync(this IRadiancePro client, string messageLine1, string messageLine2, int delay)
             => client.ShowMessageAsync(Center(messageLine1) + Center(messageLine2), delay);
 
