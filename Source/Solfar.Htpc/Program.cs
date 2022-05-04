@@ -94,26 +94,29 @@ builder.Services
 // launch web API endpoint
 var app = builder.Build();
 app.MapGet("/", GetStatusAsync);
+app.MapPost("/cledis/light-output/low", (HttpContext _, ISonyCledis cledisClient, ILogger<Program>? logger) => SwitchLightOutputAsync(logger, cledisClient, SonyCledisLightOutputMode.Low));
+app.MapPost("/cledis/light-output/full", (HttpContext _, ISonyCledis cledisClient, ILogger<Program>? logger) => SwitchLightOutputAsync(logger, cledisClient, SonyCledisLightOutputMode.Full));
 var appTask = app.RunAsync();
 
 // launch Solfar controller
 var controller = app.Services.GetRequiredService<SolfarController>();
 var controllerTask = controller.RunAsync();
 
-// close web API and Solfar controller
+// close web API and Solfar controller when ENTER key is pressed
 _ = Task.Run(() => {
     Console.ReadLine();
     controller.Close();
     app.StopAsync();
 });
 
-// wait until both are done
+// run until the web API and Solfar controller both exit
 await Task.WhenAll(new[] {
     controllerTask,
     appTask
 });
 
-async Task<HtmlDoc> GetStatusAsync(ISonyCledis cledisClient, ILogger<Program>? logger) {
+// local functions
+async Task<HtmlDoc> GetStatusAsync(ILogger<Program>? logger, ISonyCledis cledisClient) {
     logger?.LogInformation($"{nameof(GetStatusAsync)} called");
 
     // read settings from Sony C-LED controller
@@ -176,4 +179,23 @@ body {
                 .End()
             .End()
         .End();
+}
+
+async Task SwitchLightOutputAsync(ILogger<Program>? logger, ISonyCledis cledisClient, SonyCledisLightOutputMode mode) {
+    logger?.LogInformation($"{nameof(SwitchLightOutputAsync)}({mode}) called");
+
+    // check if power is on
+    var power = await cledisClient.GetPowerStatusAsync();
+    if(power != SonyCledisPowerStatus.On) {
+        logger?.LogInformation($"Sony Cledis controller is not turned on (expected: {SonyCledisPowerStatus.On}, found: {power})");
+        return;
+    }
+
+    // check if the HTPC picture mode is selected
+    var currentPictureMode = await cledisClient.GetPictureModeAsync();
+    if(currentPictureMode != SonyCledisPictureMode.Mode10) {
+        logger?.LogWarning($"Sony Cledis controller uses wrong picture mode for switching light output (expected: {SonyCledisPictureMode.Mode10}, current: {currentPictureMode})");
+        return;
+    }
+    await cledisClient.SetLightOutputMode(mode);
 }
