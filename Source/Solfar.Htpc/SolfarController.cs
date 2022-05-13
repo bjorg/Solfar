@@ -39,6 +39,7 @@ public class SolfarController : AController {
     private readonly IKaleidescape _kaleidescapeClient;
     private readonly TMDbClient _movieDbClient;
     private readonly HttpClient _httpClient;
+    private readonly MediaCenterClient _mediaCenterClient;
     private readonly MemoryCache _cache = new("TheMovieDB");
 
     //--- Constructors ---
@@ -49,6 +50,7 @@ public class SolfarController : AController {
         IKaleidescape kaleidescapeClient,
         TMDbClient movieDbClient,
         HttpClient httpClient,
+        MediaCenterClient mediaCenterClient,
         ILogger<SolfarController>? logger = null
     ) : base(logger) {
         _radianceProClient = radianceProClient ?? throw new ArgumentNullException(nameof(radianceProClient));
@@ -57,6 +59,7 @@ public class SolfarController : AController {
         _kaleidescapeClient = kaleidescapeClient ?? throw new ArgumentNullException(nameof(kaleidescapeClient));
         _movieDbClient = movieDbClient ?? throw new ArgumentNullException(nameof(movieDbClient));
         _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
+        _mediaCenterClient = mediaCenterClient ?? throw new ArgumentNullException(nameof(mediaCenterClient));
     }
 
     //--- Methods ---
@@ -66,6 +69,7 @@ public class SolfarController : AController {
         _radianceProClient.DisplayModeChanged += EventListener;
         _trinnovClient.AudioDecoderChanged += EventListener;
         _kaleidescapeClient.HighlightedSelectionChanged += EventListener;
+        _mediaCenterClient.PlaybackInfoChanged += EventListener;
 
         // initialize communication with devices
         await _trinnovClient.ConnectAsync().ConfigureAwait(false);
@@ -100,6 +104,9 @@ public class SolfarController : AController {
             break;
         case HighlightedSelectionChangedEventArgs highlightedSelectionChangedEventArgs:
             ProcessHighlightedSelectionChange(highlightedSelectionChangedEventArgs);
+            break;
+        case MediaCenterPlaybackInfoChangedEventArgs mediaCenterPlaybackInfoChangedEventArgs:
+            ProcessMediaCenterPlaybackInfoChange(mediaCenterPlaybackInfoChangedEventArgs);
             break;
         default:
             Logger?.LogWarning($"Unrecognized channel event: {args?.GetType().FullName}");
@@ -301,6 +308,25 @@ public class SolfarController : AController {
                 => rating.StartsWith("NR-", StringComparison.Ordinal)
                     ? rating.Substring(3)
                     : rating;
+        });
+
+    private void ProcessMediaCenterPlaybackInfoChange(MediaCenterPlaybackInfoChangedEventArgs mediaCenterPlaybackInfoChangedEventArgs)
+        => OnTrue("MediaCenter Playback Stopped", mediaCenterPlaybackInfoChangedEventArgs.Info.Status == "Stopped", async () => {
+
+            // check if power is on
+            var power = await _cledisClient.GetPowerStatusAsync();
+            if(power != SonyCledisPowerStatus.On) {
+                Logger?.LogInformation($"Sony Cledis controller is not turned on (expected: {SonyCledisPowerStatus.On}, found: {power})");
+                return;
+            }
+
+            // check if the HTPC picture mode is selected
+            var currentPictureMode = await _cledisClient.GetPictureModeAsync();
+            if(currentPictureMode != SonyCledisPictureMode.Mode10) {
+                Logger?.LogWarning($"Sony Cledis controller uses wrong picture mode for switching light output (expected: {SonyCledisPictureMode.Mode10}, current: {currentPictureMode})");
+                return;
+            }
+            await _cledisClient.SetLightOutputMode(SonyCledisLightOutputMode.Low);
         });
 
 

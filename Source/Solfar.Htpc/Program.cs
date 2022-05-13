@@ -88,6 +88,13 @@ builder.Services
     // HTTP client configuration
     .AddSingleton(_ => new HttpClient())
 
+    // JRiver MediaCenter client
+    .AddSingleton(_ => new MediaCenterClientConfig {
+        Url = "http://192.168.0.236:52199",
+        Delay = TimeSpan.FromSeconds(3)
+    })
+    .AddSingleton<MediaCenterClient>()
+
     // add Solfer controller
     .AddSingleton<SolfarController>();
 
@@ -100,18 +107,22 @@ var appTask = app.RunAsync();
 // launch Solfar controller
 var controller = app.Services.GetRequiredService<SolfarController>();
 var controllerTask = controller.RunAsync();
+var mediaCenter = app.Services.GetRequiredService<MediaCenterClient>();
+var mediaCenterTask = mediaCenter.RunAsync();
 
 // close web API and Solfar controller when ENTER key is pressed
 _ = Task.Run(() => {
     Console.ReadLine();
     controller.Close();
+    mediaCenter.Stop();
     app.StopAsync();
 });
 
 // run until the web API and Solfar controller both exit
 await Task.WhenAll(new[] {
     controllerTask,
-    appTask
+    appTask,
+    mediaCenterTask
 });
 
 // local functions
