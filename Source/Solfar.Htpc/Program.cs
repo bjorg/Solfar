@@ -94,8 +94,7 @@ builder.Services
 // launch web API endpoint
 var app = builder.Build();
 app.MapGet("/", GetStatusAsync);
-app.MapPost("/cledis/light-output/low", (HttpContext _, ISonyCledis cledisClient, ILogger<Program>? logger) => SwitchLightOutputAsync(logger, cledisClient, SonyCledisLightOutputMode.Low));
-app.MapPost("/cledis/light-output/full", (HttpContext _, ISonyCledis cledisClient, ILogger<Program>? logger) => SwitchLightOutputAsync(logger, cledisClient, SonyCledisLightOutputMode.Full));
+app.MapPost("/cledis/light-output/{mode}", async (string mode, HttpContext _, ISonyCledis cledisClient, ILogger<Program>? logger) => SwitchLightOutputAsync(logger, cledisClient, Enum.Parse<SonyCledisLightOutputMode>(mode, ignoreCase: true)));
 var appTask = app.RunAsync();
 
 // launch Solfar controller
