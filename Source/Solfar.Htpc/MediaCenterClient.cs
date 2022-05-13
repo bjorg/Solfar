@@ -69,13 +69,12 @@ public sealed class MediaCenterClient {
     //--- Fields ---
     private readonly MediaCenterClientConfig _config;
     private HttpClient _httpClient;
-    private ILogger? _logger;
     private MediaCenterPlaybackInfo? _lastPlaybackInfo;
     private readonly CancellationTokenSource _loopCancellationTokenSource = new();
 
     //--- Constructors ---
     public MediaCenterClient(MediaCenterClientConfig config, HttpClient httpClient, ILogger<MediaCenterClient>? logger = null) {
-        _logger = logger;
+        Logger = logger;
         _config = config ?? throw new ArgumentNullException(nameof(config));
         _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
     }
@@ -83,48 +82,58 @@ public sealed class MediaCenterClient {
     //--- Events ---
     public event EventHandler<MediaCenterPlaybackInfoChangedEventArgs>? PlaybackInfoChanged;
 
+    //--- Properties ---
+    private ILogger? Logger { get; }
+
     //--- Methods ---
     public Task RunAsync() => Task.Run(async () => {
         while(!_loopCancellationTokenSource.IsCancellationRequested) {
-            await Task.Delay(_config.Delay);
-            var playbackInfo = await GetPlaybackInfoAsync();
-            if(playbackInfo != _lastPlaybackInfo) {
+            var playbackInfo = await GetPlaybackInfoAsync(_loopCancellationTokenSource.Token);
+            if((playbackInfo is not null) && (playbackInfo != _lastPlaybackInfo)) {
+                Logger?.LogInformation($"MediaCenter playback status changed: {playbackInfo}");
                 _lastPlaybackInfo = playbackInfo;
                 PlaybackInfoChanged?.Invoke(this, new(playbackInfo));
             }
+            await Task.Delay(_config.Delay);
         }
     });
 
     public void Stop() => _loopCancellationTokenSource.Cancel();
 
-    private async Task<MediaCenterPlaybackInfo> GetPlaybackInfoAsync() {
-        var response = await _httpClient.GetAsync($"{_config.Url}/MCWS/v1/Playback/Info?Zone=-1");
-        var doc = XDocument.Load(response.Content.ReadAsStream(), LoadOptions.None);
-        return new MediaCenterPlaybackInfo(
-            ZoneID: (string?)doc.XPathSelectElement("Response/Item[Name='ZoneID']") ?? "",
-            State: (string?)doc.XPathSelectElement("Response/Item[Name='State']") ?? "",
-            FileKey: (string?)doc.XPathSelectElement("Response/Item[Name='FileKey']") ?? "",
-            NextFileKey: (string?)doc.XPathSelectElement("Response/Item[Name='NextFileKey']") ?? "",
-            PositionMS: (string?)doc.XPathSelectElement("Response/Item[Name='PositionMS']") ?? "",
-            DurationMS: (string?)doc.XPathSelectElement("Response/Item[Name='DurationMS']") ?? "",
-            ElapsedTimeDisplay: (string?)doc.XPathSelectElement("Response/Item[Name='ElapsedTimeDisplay']") ?? "",
-            RemainingTimeDisplay: (string?)doc.XPathSelectElement("Response/Item[Name='RemainingTimeDisplay']") ?? "",
-            TotalTimeDisplay: (string?)doc.XPathSelectElement("Response/Item[Name='TotalTimeDisplay']") ?? "",
-            PositionDisplay: (string?)doc.XPathSelectElement("Response/Item[Name='PositionDisplay']") ?? "",
-            PlayingNowPosition: (string?)doc.XPathSelectElement("Response/Item[Name='PlayingNowPosition']") ?? "",
-            PlayingNowTracks: (string?)doc.XPathSelectElement("Response/Item[Name='PlayingNowTracks']") ?? "",
-            PlayingNowPositionDisplay: (string?)doc.XPathSelectElement("Response/Item[Name='PlayingNowPositionDisplay']") ?? "",
-            PlayingNowChangeCounter: (string?)doc.XPathSelectElement("Response/Item[Name='PlayingNowChangeCounter']") ?? "",
-            Bitrate: (string?)doc.XPathSelectElement("Response/Item[Name='Bitrate']") ?? "",
-            Bitdepth: (string?)doc.XPathSelectElement("Response/Item[Name='Bitdepth']") ?? "",
-            SampleRate: (string?)doc.XPathSelectElement("Response/Item[Name='SampleRate']") ?? "",
-            Channels: (string?)doc.XPathSelectElement("Response/Item[Name='Channels']") ?? "",
-            Chapter: (string?)doc.XPathSelectElement("Response/Item[Name='Chapter']") ?? "",
-            Volume: (string?)doc.XPathSelectElement("Response/Item[Name='Volume']") ?? "",
-            VolumeDisplay: (string?)doc.XPathSelectElement("Response/Item[Name='VolumeDisplay']") ?? "",
-            ImageURL: (string?)doc.XPathSelectElement("Response/Item[Name='ImageURL']") ?? "",
-            Name: (string?)doc.XPathSelectElement("Response/Item[Name='Name']") ?? "",
-            Status: (string?)doc.XPathSelectElement("Response/Item[Name='Status']") ?? ""
-        );
+    private async Task<MediaCenterPlaybackInfo?> GetPlaybackInfoAsync(CancellationToken cancellationToken = default) {
+        try {
+            var response = await _httpClient.GetAsync($"{_config.Url}/MCWS/v1/Playback/Info?Zone=-1", cancellationToken);
+            var content = await response.Content.ReadAsStringAsync();
+            Logger?.LogTrace($"Playback XML: {content}");
+            var doc = XDocument.Parse(content, LoadOptions.None);
+            return new MediaCenterPlaybackInfo(
+                ZoneID: doc.XPathSelectElement("Response/Item[@Name='ZoneID']")?.Value ?? "",
+                State: doc.XPathSelectElement("Response/Item[@Name='State']")?.Value ?? "",
+                FileKey: doc.XPathSelectElement("Response/Item[@Name='FileKey']")?.Value ?? "",
+                NextFileKey: doc.XPathSelectElement("Response/Item[@Name='NextFileKey']")?.Value ?? "",
+                PositionMS: doc.XPathSelectElement("Response/Item[@Name='PositionMS']")?.Value ?? "",
+                DurationMS: doc.XPathSelectElement("Response/Item[@Name='DurationMS']")?.Value ?? "",
+                ElapsedTimeDisplay: doc.XPathSelectElement("Response/Item[@Name='ElapsedTimeDisplay']")?.Value ?? "",
+                RemainingTimeDisplay: doc.XPathSelectElement("Response/Item[@Name='RemainingTimeDisplay']")?.Value ?? "",
+                TotalTimeDisplay: doc.XPathSelectElement("Response/Item[@Name='TotalTimeDisplay']")?.Value ?? "",
+                PositionDisplay: doc.XPathSelectElement("Response/Item[@Name='PositionDisplay']")?.Value ?? "",
+                PlayingNowPosition: doc.XPathSelectElement("Response/Item[@Name='PlayingNowPosition']")?.Value ?? "",
+                PlayingNowTracks: doc.XPathSelectElement("Response/Item[@Name='PlayingNowTracks']")?.Value ?? "",
+                PlayingNowPositionDisplay: doc.XPathSelectElement("Response/Item[@Name='PlayingNowPositionDisplay']")?.Value ?? "",
+                PlayingNowChangeCounter: doc.XPathSelectElement("Response/Item[@Name='PlayingNowChangeCounter']")?.Value ?? "",
+                Bitrate: doc.XPathSelectElement("Response/Item[@Name='Bitrate']")?.Value ?? "",
+                Bitdepth: doc.XPathSelectElement("Response/Item[@Name='Bitdepth']")?.Value ?? "",
+                SampleRate: doc.XPathSelectElement("Response/Item[@Name='SampleRate']")?.Value ?? "",
+                Channels: doc.XPathSelectElement("Response/Item[@Name='Channels']")?.Value ?? "",
+                Chapter: doc.XPathSelectElement("Response/Item[@Name='Chapter']")?.Value ?? "",
+                Volume: doc.XPathSelectElement("Response/Item[@Name='Volume']")?.Value ?? "",
+                VolumeDisplay: doc.XPathSelectElement("Response/Item[@Name='VolumeDisplay']")?.Value ?? "",
+                ImageURL: doc.XPathSelectElement("Response/Item[@Name='ImageURL']")?.Value ?? "",
+                Name: doc.XPathSelectElement("Response/Item[@Name='Name']")?.Value ?? "",
+                Status: doc.XPathSelectElement("Response/Item[@Name='Status']")?.Value ?? ""
+            );
+        } catch {
+            return null;
+        }
     }
 }

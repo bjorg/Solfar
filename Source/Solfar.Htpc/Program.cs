@@ -48,6 +48,7 @@ builder.Services
         .AddFilter("RadiantPi.Sony.Cledis.SonyCledisClient", LogLevel.Trace)
         .AddFilter("RadiantPi.Trinnov.Altitude.TrinnovAltitudeClient", LogLevel.Trace)
         .AddFilter("RadiantPi.Automation.AutomationController", LogLevel.Trace)
+        // .AddFilter("MediaCenterClient", LogLevel.Trace)
         .AddConsole()
         .AddFile("Logs/Solfar-{Date}.log", LogLevel.Trace)
     )
