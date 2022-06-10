@@ -344,7 +344,7 @@ public class SolfarController : AController {
         // check if Dual-DisplayPort is the active input
         var input = await _cledisClient.GetInputAsync();
         if(input != SonyCledisInput.DisplayPortBoth) {
-            response = $"Sony C-LED active input is not Dual-DispayPort (current: {input})";
+            response = $"Sony C-LED active input is not Dual-DisplayPort (current: {input})";
             goto done;
         }
 
