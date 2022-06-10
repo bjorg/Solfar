@@ -69,13 +69,16 @@ namespace RadiantPi.Cortex {
         protected virtual Task Initialize(CancellationToken cancellationToken) => Task.CompletedTask;
         protected virtual Task Shutdown(CancellationToken cancellationToken) => Task.CompletedTask;
 
-        protected virtual void OnTrue(string name, bool condition, Func<Task> callback)
-            => OnCondition(name, condition, (oldState, newState) => newState && !oldState, _ => callback());
+        protected virtual void TriggerOnTrue(string name, bool condition, Func<Task> callback)
+            => TriggerOnCondition(name, condition, (oldState, newState) => newState && !oldState, _ => callback());
 
-        protected virtual void OnValueChanged<T>(string name, T value, Func<T, Task> callback) where T : notnull
-            => OnCondition(name, value, (oldState, newState) => !object.Equals(oldState, newState), callback);
+        protected virtual void TriggerAlways(string name, Func<Task> callback)
+            => TriggerOnCondition(name, newState: "N/A", (_, _) => true, _ => callback());
 
-        protected virtual void OnCondition<T>(string name, T newState, Func<T, T, bool> condition, Func<T, Task> callback) where T : notnull {
+        protected virtual void TriggerOnValueChanged<T>(string name, T value, Func<T, Task> callback) where T : notnull
+            => TriggerOnCondition(name, value, (oldState, newState) => !object.Equals(oldState, newState), callback);
+
+        protected virtual void TriggerOnCondition<T>(string name, T newState, Func<T, T, bool> condition, Func<T, Task> callback) where T : notnull {
             if(condition is null) {
                 throw new ArgumentNullException(nameof(condition));
             }

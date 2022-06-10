@@ -32,6 +32,14 @@ using TMDbLib.Objects.Search;
 
 public class SolfarController : AController {
 
+    //--- Constants ---
+    private const RadianceProStyle RadianceProStyleFitNative = RadianceProStyle.Style0;
+    private const RadianceProStyle RadianceProStyleFitWidth = RadianceProStyle.Style1;
+    private const RadianceProStyle RadianceProStyleFitHeight = RadianceProStyle.Style2;
+    private const RadianceProMemory RadianceProMemoryFitNative = RadianceProMemory.MemoryA;
+    private const RadianceProMemory RadianceProMemoryFitWidth = RadianceProMemory.MemoryB;
+    private const RadianceProMemory RadianceProMemoryFitHeight = RadianceProMemory.MemoryC;
+
     //--- Fields ---
     private readonly IRadiancePro _radianceProClient;
     private readonly ISonyCledis _cledisClient;
@@ -41,6 +49,8 @@ public class SolfarController : AController {
     private readonly HttpClient _httpClient;
     private readonly MediaCenterClient _mediaCenterClient;
     private readonly MemoryCache _cache = new("TheMovieDB");
+    private bool _sourceChanged;
+    private RadianceProMemory? _selectMemory;
 
     //--- Constructors ---
     public SolfarController(
@@ -132,63 +142,88 @@ public class SolfarController : AController {
         var isHtpc3D = radianceProDisplayMode.PhysicalInputSelected is 4;
 
         // select video input
-        OnTrue("Switch to Lumagen 2D", !isHtpc2D && !isHtpc3D && !is3D, async () => {
+        TriggerOnTrue("Switch to Lumagen 2D", !isHtpc2D && !isHtpc3D && !is3D, async () => {
             await _cledisClient.SetInputAsync(SonyCledisInput.Hdmi1);
         });
-        OnTrue("Switch to Lumagen 3D", !isHtpc2D && !isHtpc3D && is3D, async () => {
+        TriggerOnTrue("Switch to Lumagen 3D", !isHtpc2D && !isHtpc3D && is3D, async () => {
             await _cledisClient.SetInputAsync(SonyCledisInput.Hdmi2);
             await _cledisClient.SetPictureModeAsync(SonyCledisPictureMode.Mode3);
-            await _radianceProClient.SelectMemoryAsync(RadianceProMemory.MemoryA);
         });
-        OnTrue("Switch to HTPC 2D", isHtpc2D, async () => {
+        TriggerOnTrue("Switch to HTPC 2D", isHtpc2D, async () => {
             await _cledisClient.SetInputAsync(SonyCledisInput.DisplayPortBoth);
             await Task.Delay(TimeSpan.FromSeconds(5));
             await SwitchTo2DAsync();
         });
-        OnTrue("Switch to HTPC 3D", isHtpc3D, async () => {
+        TriggerOnTrue("Switch to HTPC 3D", isHtpc3D, async () => {
             await _cledisClient.SetInputAsync(SonyCledisInput.DisplayPortBoth);
             await Task.Delay(TimeSpan.FromSeconds(5));
             await SwitchTo3DAsync();
         });
 
         // select audio input
-        OnTrue("Switch to Lumagen Audio Output", !isHtpc2D && !isHtpc3D && !isKaleidescape && !isOppo, async () => {
+        TriggerOnTrue("Switch to Lumagen Audio Output", !isHtpc2D && !isHtpc3D && !isKaleidescape && !isOppo, async () => {
             await _trinnovClient.SelectProfileAsync(TrinnovAltitudeProfile.Hdmi7);
         });
-        OnTrue("Switch to HTPC Audio Output", isHtpc2D || isHtpc3D, async () => {
+        TriggerOnTrue("Switch to HTPC Audio Output", isHtpc2D || isHtpc3D, async () => {
             await _trinnovClient.SelectProfileAsync(TrinnovAltitudeProfile.Hdmi6);
         });
-        OnTrue("Switch to Kaleidescape Output", isKaleidescape, async () => {
+        TriggerOnTrue("Switch to Kaleidescape Output", isKaleidescape, async () => {
             await _trinnovClient.SelectProfileAsync(TrinnovAltitudeProfile.Hdmi5);
         });
-        OnTrue("Switch to Oppo Output", isOppo, async () => {
+        TriggerOnTrue("Switch to Oppo Output", isOppo, async () => {
 
             // TODO: switch between "Auto" and "Auro-3D"
             await _trinnovClient.SelectProfileAsync(TrinnovAltitudeProfile.Hdmi4);
         });
 
         // select display brightness
-        OnTrue("Switch to SDR", !isHtpc2D && !isHtpc3D && !is3D && !isHdr, async () => {
+        TriggerOnTrue("Switch to SDR", !isHtpc2D && !isHtpc3D && !is3D && !isHdr, async () => {
             await _cledisClient.SetPictureModeAsync(SonyCledisPictureMode.Mode1);
         });
-        OnTrue("Switch to HDR", !isHtpc2D && !isHtpc3D && !is3D && isHdr, async () => {
+        TriggerOnTrue("Switch to HDR", !isHtpc2D && !isHtpc3D && !is3D && isHdr, async () => {
             await _cledisClient.SetPictureModeAsync(SonyCledisPictureMode.Mode2);
         });
 
+        // determine if the source has changed
+        var sourceInput = radianceProDisplayMode.PhysicalInputSelected;
+        var sourceDynamicRange = radianceProDisplayMode.SourceDynamicRange;
+        var sourceVerticalRate = radianceProDisplayMode.SourceVerticalRate;
+        var sourceVerticalResolution = radianceProDisplayMode.SourceVerticalResolution;
+        TriggerOnValueChanged("Source Changed", $"{sourceInput}-{sourceDynamicRange}-{sourceVerticalRate}-{sourceVerticalResolution}", async (_) => {
+            _sourceChanged = true;
+            _selectMemory = RadianceProMemoryFitNative;
+        });
+
         // select video processor aspect-ratio
-        OnTrue("Fit Height", !isHtpc2D && !isHtpc3D && !is3D && (fitHeight || isGui), async () => {
-            await _radianceProClient.SelectMemoryAsync(RadianceProMemory.MemoryC);
+        TriggerOnTrue("Fit GUI", !isHtpc2D && !isHtpc3D && !is3D && isGui, async () => {
+            _selectMemory = RadianceProMemoryFitHeight;
         });
-        OnTrue("Fit Width", !isHtpc2D && !isHtpc3D && !is3D && fitWidth && !isGui, async () => {
-            await _radianceProClient.SelectMemoryAsync(RadianceProMemory.MemoryB);
+        TriggerOnTrue("Fit Height", !isHtpc2D && !isHtpc3D && !is3D && fitHeight, async () => {
+            if(_sourceChanged || (RadianceProStyleFitHeight > radianceProDisplayMode.OutputStyle)) {
+                _selectMemory = RadianceProMemoryFitHeight;
+            }
         });
-        OnTrue("Fit Native", !isHtpc2D && !isHtpc3D && !is3D && fitNative && !isGui, async () => {
-            await _radianceProClient.SelectMemoryAsync(RadianceProMemory.MemoryA);
+        TriggerOnTrue("Fit Width", !isHtpc2D && !isHtpc3D && !is3D && fitWidth && !isGui, async () => {
+            if(_sourceChanged || (RadianceProStyleFitWidth > radianceProDisplayMode.OutputStyle)) {
+                _selectMemory = RadianceProMemoryFitWidth;
+            }
+        });
+        TriggerOnTrue("Fit Native", !isHtpc2D && !isHtpc3D && !is3D && fitNative && !isGui, async () => {
+            if(_sourceChanged || (RadianceProStyleFitNative > radianceProDisplayMode.OutputStyle)) {
+                _selectMemory = RadianceProMemoryFitNative;
+            }
+        });
+        TriggerAlways("Apply Memory Change", async () => {
+            if(_selectMemory is not null) {
+                await _radianceProClient.SelectMemoryAsync(_selectMemory.Value);
+            }
+            _sourceChanged = false;
+            _selectMemory = null;
         });
     }
 
     private void ProcessAudioCodeChange(AudioDecoderChangedEventArgs altitudeAudioDecoder)
-        => OnValueChanged("Show Audio Codec", (Decoder: altitudeAudioDecoder.Decoder, Upmixer: altitudeAudioDecoder.Upmixer), async state => {
+        => TriggerOnValueChanged("Show Audio Codec", (Decoder: altitudeAudioDecoder.Decoder, Upmixer: altitudeAudioDecoder.Upmixer), async state => {
 
             // determine value for upmixer message
             var upmixer = state.Upmixer;
@@ -264,7 +299,7 @@ public class SolfarController : AController {
         });
 
     private void ProcessHighlightedSelectionChange(HighlightedSelectionChangedEventArgs highlightedSelectionChangedEventArgs)
-        => OnValueChanged("Show Kaleidescape Selection", highlightedSelectionChangedEventArgs.SelectionId, async selectionId => {
+        => TriggerOnValueChanged("Show Kaleidescape Selection", highlightedSelectionChangedEventArgs.SelectionId, async selectionId => {
             var details = await _kaleidescapeClient.GetContentDetailsAsync(selectionId);
 
             // "---------|---------|---------|"
@@ -311,7 +346,7 @@ public class SolfarController : AController {
         });
 
     private void ProcessMediaCenterPlaybackInfoChange(MediaCenterPlaybackInfoChangedEventArgs mediaCenterPlaybackInfoChangedEventArgs)
-        => OnTrue("MediaCenter Playback Stopped", mediaCenterPlaybackInfoChangedEventArgs.Info.Status == "Stopped", async () => {
+        => TriggerOnTrue("MediaCenter Playback Stopped", mediaCenterPlaybackInfoChangedEventArgs.Info.Status == "Stopped", async () => {
 
             // check if power is on
             var power = await _cledisClient.GetPowerStatusAsync();
