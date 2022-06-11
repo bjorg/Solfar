@@ -49,7 +49,7 @@ public class SolfarController : AController {
     private readonly HttpClient _httpClient;
     private readonly MediaCenterClient _mediaCenterClient;
     private readonly MemoryCache _cache = new("TheMovieDB");
-    private bool _sourceChanged;
+    private DateTimeOffset _lastSourceChange = DateTimeOffset.MinValue;
     private RadianceProMemory? _selectMemory;
 
     //--- Constructors ---
@@ -71,6 +71,9 @@ public class SolfarController : AController {
         _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
         _mediaCenterClient = mediaCenterClient ?? throw new ArgumentNullException(nameof(mediaCenterClient));
     }
+
+    //--- Properties ---
+    private bool RecentSourceChange => _lastSourceChange.AddSeconds(30) >= DateTimeOffset.UtcNow;
 
     //--- Methods ---
     protected override async Task Initialize(CancellationToken cancellationToken) {
@@ -190,8 +193,8 @@ public class SolfarController : AController {
         var sourceVerticalRate = radianceProDisplayMode.SourceVerticalRate;
         var sourceVerticalResolution = radianceProDisplayMode.SourceVerticalResolution;
         TriggerOnValueChanged("Source Changed", $"{sourceInput}-{sourceDynamicRange}-{sourceVerticalRate}-{sourceVerticalResolution}", async (_) => {
-            _sourceChanged = true;
-            _selectMemory = RadianceProMemoryFitNative;
+            _lastSourceChange = DateTimeOffset.UtcNow;
+            _selectMemory = RadianceProMemoryFitWidth;
         });
 
         // select video processor aspect-ratio
@@ -199,17 +202,17 @@ public class SolfarController : AController {
             _selectMemory = RadianceProMemoryFitHeight;
         });
         TriggerOnTrue("Fit Height", !isHtpc2D && !isHtpc3D && !is3D && fitHeight, async () => {
-            if(_sourceChanged || (RadianceProStyleFitHeight > radianceProDisplayMode.OutputStyle)) {
+            if(RecentSourceChange || (RadianceProStyleFitHeight > radianceProDisplayMode.OutputStyle)) {
                 _selectMemory = RadianceProMemoryFitHeight;
             }
         });
         TriggerOnTrue("Fit Width", !isHtpc2D && !isHtpc3D && !is3D && fitWidth && !isGui, async () => {
-            if(_sourceChanged || (RadianceProStyleFitWidth > radianceProDisplayMode.OutputStyle)) {
+            if(RecentSourceChange || (RadianceProStyleFitWidth > radianceProDisplayMode.OutputStyle)) {
                 _selectMemory = RadianceProMemoryFitWidth;
             }
         });
         TriggerOnTrue("Fit Native", !isHtpc2D && !isHtpc3D && !is3D && fitNative && !isGui, async () => {
-            if(_sourceChanged || (RadianceProStyleFitNative > radianceProDisplayMode.OutputStyle)) {
+            if(RecentSourceChange || (RadianceProStyleFitNative > radianceProDisplayMode.OutputStyle)) {
                 _selectMemory = RadianceProMemoryFitNative;
             }
         });
@@ -217,7 +220,6 @@ public class SolfarController : AController {
             if(_selectMemory is not null) {
                 await _radianceProClient.SelectMemoryAsync(_selectMemory.Value);
             }
-            _sourceChanged = false;
             _selectMemory = null;
         });
     }
