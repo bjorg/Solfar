@@ -51,6 +51,7 @@ public class SolfarController : AController {
     private readonly MemoryCache _cache = new("TheMovieDB");
     private DateTimeOffset _lastSourceChange = DateTimeOffset.MinValue;
     private RadianceProMemory? _selectMemory;
+    private string _lastSource = "";
 
     //--- Constructors ---
     public SolfarController(
@@ -192,29 +193,25 @@ public class SolfarController : AController {
         var sourceDynamicRange = radianceProDisplayMode.SourceDynamicRange;
         var sourceVerticalRate = radianceProDisplayMode.SourceVerticalRate;
         var sourceVerticalResolution = radianceProDisplayMode.SourceVerticalResolution;
-        TriggerOnValueChanged("Source Changed", $"{sourceInput}-{sourceDynamicRange}-{sourceVerticalRate}-{sourceVerticalResolution}", async (_) => {
+        var currentSource = $"{sourceInput}-{sourceDynamicRange}-{sourceVerticalRate}-{sourceVerticalResolution}";
+        if(currentSource != _lastSource) {
+            _lastSource = currentSource;
             _lastSourceChange = DateTimeOffset.UtcNow;
             _selectMemory = RadianceProMemoryFitWidth;
-        });
+        }
 
         // select video processor aspect-ratio
         TriggerOnTrue("Fit GUI", !isHtpc2D && !isHtpc3D && !is3D && isGui, async () => {
             _selectMemory = RadianceProMemoryFitHeight;
         });
-        TriggerOnTrue("Fit Height", !isHtpc2D && !isHtpc3D && !is3D && fitHeight, async () => {
-            if(RecentSourceChange || (RadianceProStyleFitHeight > radianceProDisplayMode.OutputStyle)) {
-                _selectMemory = RadianceProMemoryFitHeight;
-            }
+        TriggerOnTrue("Fit Height", !isHtpc2D && !isHtpc3D && !is3D && fitHeight && !isGui && (RecentSourceChange || (RadianceProStyleFitHeight > radianceProDisplayMode.OutputStyle)), async () => {
+            _selectMemory = RadianceProMemoryFitHeight;
         });
-        TriggerOnTrue("Fit Width", !isHtpc2D && !isHtpc3D && !is3D && fitWidth && !isGui, async () => {
-            if(RecentSourceChange || (RadianceProStyleFitWidth > radianceProDisplayMode.OutputStyle)) {
-                _selectMemory = RadianceProMemoryFitWidth;
-            }
+        TriggerOnTrue("Fit Width", !isHtpc2D && !isHtpc3D && !is3D && fitWidth && !isGui && (RecentSourceChange || (RadianceProStyleFitWidth > radianceProDisplayMode.OutputStyle)), async () => {
+            _selectMemory = RadianceProMemoryFitWidth;
         });
-        TriggerOnTrue("Fit Native", !isHtpc2D && !isHtpc3D && !is3D && fitNative && !isGui, async () => {
-            if(RecentSourceChange || (RadianceProStyleFitNative > radianceProDisplayMode.OutputStyle)) {
-                _selectMemory = RadianceProMemoryFitNative;
-            }
+        TriggerOnTrue("Fit Native", !isHtpc2D && !isHtpc3D && !is3D && fitNative && !isGui && (RecentSourceChange || (RadianceProStyleFitNative > radianceProDisplayMode.OutputStyle)), async () => {
+            _selectMemory = RadianceProMemoryFitNative;
         });
         TriggerAlways("Apply Memory Change", async () => {
             if(_selectMemory is not null) {
