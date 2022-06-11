@@ -50,7 +50,6 @@ public class SolfarController : AController {
     private readonly MediaCenterClient _mediaCenterClient;
     private readonly MemoryCache _cache = new("TheMovieDB");
     private DateTimeOffset _lastSourceChange = DateTimeOffset.MinValue;
-    private RadianceProMemory? _selectMemory;
     private string _lastSource = "";
 
     //--- Constructors ---
@@ -197,27 +196,20 @@ public class SolfarController : AController {
         if(currentSource != _lastSource) {
             _lastSource = currentSource;
             _lastSourceChange = DateTimeOffset.UtcNow;
-            _selectMemory = RadianceProMemoryFitWidth;
         }
 
         // select video processor aspect-ratio
         TriggerOnTrue("Fit GUI", !isHtpc2D && !isHtpc3D && !is3D && isGui, async () => {
-            _selectMemory = RadianceProMemoryFitHeight;
+            await _radianceProClient.SelectMemoryAsync(RadianceProMemoryFitHeight);
         });
         TriggerOnTrue("Fit Height", !isHtpc2D && !isHtpc3D && !is3D && fitHeight && !isGui && (RecentSourceChange || (RadianceProStyleFitHeight > radianceProDisplayMode.OutputStyle)), async () => {
-            _selectMemory = RadianceProMemoryFitHeight;
+            await _radianceProClient.SelectMemoryAsync(RadianceProMemoryFitHeight);
         });
         TriggerOnTrue("Fit Width", !isHtpc2D && !isHtpc3D && !is3D && fitWidth && !isGui && (RecentSourceChange || (RadianceProStyleFitWidth > radianceProDisplayMode.OutputStyle)), async () => {
-            _selectMemory = RadianceProMemoryFitWidth;
+            await _radianceProClient.SelectMemoryAsync(RadianceProMemoryFitWidth);
         });
         TriggerOnTrue("Fit Native", !isHtpc2D && !isHtpc3D && !is3D && fitNative && !isGui && (RecentSourceChange || (RadianceProStyleFitNative > radianceProDisplayMode.OutputStyle)), async () => {
-            _selectMemory = RadianceProMemoryFitNative;
-        });
-        TriggerAlways("Apply Memory Change", async () => {
-            if(_selectMemory is not null) {
-                await _radianceProClient.SelectMemoryAsync(_selectMemory.Value);
-            }
-            _selectMemory = null;
+            await _radianceProClient.SelectMemoryAsync(RadianceProMemoryFitNative);
         });
     }
 
