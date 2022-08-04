@@ -359,6 +359,7 @@ public class SolfarController : AController {
     private async Task<string> SwitchTo2DAsync() {
         Logger?.LogInformation($"{nameof(SwitchTo2DAsync)} called");
         var response = "Ok";
+        var restarted = false;
 
         // check if Sony C-LED is turned on
         var power = await _cledisClient.GetPowerStatusAsync();
@@ -374,15 +375,36 @@ public class SolfarController : AController {
             goto done;
         }
 
+    again:
         // check current display status
         var displayStatus = DisplayApi.GetCurrentDisplayStatus();
         switch(displayStatus.NVidiaMode) {
         default:
         case NVidiaMode.Undefined:
+
+            // check if we have already restarted the graphics driver
+            if(!restarted) {
+                restarted = true;
+
+                // restart display driver and wait for it to settle
+                await RestartDisplayDriverAsync();
+                await Task.Delay(TimeSpan.FromSeconds(15));
+                goto again;
+            }
             response = $"HTPC NVidia display mode could not be identified (mode: {displayStatus.NVidiaMode})";
             break;
         case NVidiaMode.Disabled:
-            response = $"HTPC NVidia adapter has not displays attached";
+
+            // check if we have already restarted the graphics driver
+            if(!restarted) {
+                restarted = true;
+
+                // restart display driver and wait for it to settle
+                await RestartDisplayDriverAsync();
+                await Task.Delay(TimeSpan.FromSeconds(15));
+                goto again;
+            }
+            response = $"HTPC NVidia adapter has no displays attached";
             break;
         case NVidiaMode.Surround3D:
             Logger?.LogInformation($"Disabling NVIDIA 3D surround mode");
@@ -425,6 +447,7 @@ public class SolfarController : AController {
     private async Task<string> SwitchTo3DAsync() {
         Logger?.LogInformation($"{nameof(SwitchTo3DAsync)} called");
         var response = "Ok";
+        var restarted = false;
 
         // check if Sony C-LED is turned on
         var power = await _cledisClient.GetPowerStatusAsync();
@@ -440,14 +463,35 @@ public class SolfarController : AController {
             goto done;
         }
 
+    again:
         // check current display status
         var displayStatus = DisplayApi.GetCurrentDisplayStatus();
         switch(displayStatus.NVidiaMode) {
         default:
         case NVidiaMode.Undefined:
+
+            // check if we have already restarted the graphics driver
+            if(!restarted) {
+                restarted = true;
+
+                // restart display driver and wait for it to settle
+                await RestartDisplayDriverAsync();
+                await Task.Delay(TimeSpan.FromSeconds(15));
+                goto again;
+            }
             response = $"HTPC NVidia display mode could not be identified (mode: {displayStatus.NVidiaMode})";
             break;
         case NVidiaMode.Disabled:
+
+            // check if we have already restarted the graphics driver
+            if(!restarted) {
+                restarted = true;
+
+                // restart display driver and wait for it to settle
+                await RestartDisplayDriverAsync();
+                await Task.Delay(TimeSpan.FromSeconds(15));
+                goto again;
+            }
             response = $"HTPC NVidia adapter has not displays attached";
             break;
         case NVidiaMode.Surround4K:
@@ -521,6 +565,24 @@ public class SolfarController : AController {
             }
         } else {
             Logger?.LogError($"{nameof(SwitchMonitorProfileAsync)}: unable to start process");
+        }
+    }
+
+    private async Task RestartDisplayDriverAsync() {
+        Logger?.LogInformation($"Restarting display driver");
+        using var process = Process.Start(new ProcessStartInfo() {
+            FileName = @"C:\Projects\cru-1.5.1\restart64.exe",
+            Arguments = $"/q",
+            WindowStyle = ProcessWindowStyle.Hidden,
+            CreateNoWindow = true
+        });
+        if(process is not null) {
+            await process.WaitForExitAsync();
+            if(process.ExitCode != 0) {
+                Logger?.LogWarning($"{nameof(RestartDisplayDriverAsync)}: exited with code: {process.ExitCode}");
+            }
+        } else {
+            Logger?.LogError($"{nameof(RestartDisplayDriverAsync)}: unable to start process");
         }
     }
 }
