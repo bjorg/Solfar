@@ -96,7 +96,7 @@ builder.Services
     })
     .AddSingleton<MediaCenterClient>()
 
-    // add Solfer controller
+    // add Solfar controller
     .AddSingleton<SolfarController>();
 
 // launch web API endpoint
