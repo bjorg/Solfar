@@ -450,10 +450,26 @@ public class SolfarController : AController {
         var restarted = false;
 
         // check if Sony C-LED is turned on
+    retryGetPowerStatus:
+        var retryGetPowerStatusDelay = TimeSpan.FromSeconds(10);
         var power = await _cledisClient.GetPowerStatusAsync();
-        if(power != SonyCledisPowerStatus.On) {
+        switch(power) {
+        case SonyCledisPowerStatus.Initializing:
+        case SonyCledisPowerStatus.Startup:
+            Logger?.LogInformation($"Sony C-LED is starting up. Retrying in {retryGetPowerStatusDelay.TotalSeconds:N} seconds");
+            await Task.Delay(retryGetPowerStatusDelay);
+            goto retryGetPowerStatus;
+        case SonyCledisPowerStatus.On:
+
+            // good to go
+            break;
+        case SonyCledisPowerStatus.ShuttingDown:
+        case SonyCledisPowerStatus.StandBy:
+        case SonyCledisPowerStatus.Updating:
+        case SonyCledisPowerStatus.Undefined:
+        default:
             response = $"Sony C-LED is not on (current: {power})";
-            goto done;
+            break;
         }
 
         // check if Dual-DisplayPort is the active input
