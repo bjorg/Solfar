@@ -92,7 +92,7 @@ builder.Services
     // JRiver MediaCenter client
     .AddSingleton(_ => new MediaCenterClientConfig {
         Url = "http://192.168.0.236:52199",
-        Delay = TimeSpan.FromSeconds(3)
+        Interval = TimeSpan.FromSeconds(3)
     })
     .AddSingleton<MediaCenterClient>()
 

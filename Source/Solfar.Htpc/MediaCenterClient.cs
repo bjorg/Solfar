@@ -61,9 +61,10 @@ public sealed class MediaCenterClientConfig {
 
     //--- Properties ---
     public string? Url { get; set; }
-    public TimeSpan Delay { get; set; }
+    public TimeSpan Interval { get; set; } = TimeSpan.FromSeconds(5);
 }
 
+// TODO: convert to generic client
 public sealed class MediaCenterClient {
 
     //--- Fields ---
@@ -94,7 +95,7 @@ public sealed class MediaCenterClient {
                 _lastPlaybackInfo = playbackInfo;
                 PlaybackInfoChanged?.Invoke(this, new(playbackInfo));
             }
-            await Task.Delay(_config.Delay);
+            await Task.Delay(_config.Interval);
         }
     });
 
