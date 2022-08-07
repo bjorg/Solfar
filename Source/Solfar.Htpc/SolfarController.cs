@@ -479,8 +479,9 @@ public class SolfarController : AController {
             goto done;
         }
 
-    again:
         // check current display status
+    retryGetDisplayStatus:
+        var retryGetDisplayStatusDelay = TimeSpan.FromSeconds(15);
         var displayStatus = DisplayApi.GetCurrentDisplayStatus();
         switch(displayStatus.NVidiaMode) {
         default:
@@ -491,9 +492,10 @@ public class SolfarController : AController {
                 restarted = true;
 
                 // restart display driver and wait for it to settle
+                Logger?.LogInformation($"Unknown display status. Restarting display driver. Retrying in {retryGetDisplayStatusDelay.TotalSeconds:N} seconds");
                 await RestartDisplayDriverAsync();
-                await Task.Delay(TimeSpan.FromSeconds(15));
-                goto again;
+                await Task.Delay(retryGetDisplayStatusDelay);
+                goto retryGetDisplayStatus;
             }
             response = $"HTPC NVidia display mode could not be identified (mode: {displayStatus.NVidiaMode})";
             break;
@@ -504,9 +506,10 @@ public class SolfarController : AController {
                 restarted = true;
 
                 // restart display driver and wait for it to settle
+                Logger?.LogInformation($"Unknown display status. Restarting display driver. Retrying in {retryGetDisplayStatusDelay.TotalSeconds:N} seconds");
                 await RestartDisplayDriverAsync();
-                await Task.Delay(TimeSpan.FromSeconds(15));
-                goto again;
+                await Task.Delay(retryGetDisplayStatusDelay);
+                goto retryGetDisplayStatus;
             }
             response = $"HTPC NVidia adapter has not displays attached";
             break;
