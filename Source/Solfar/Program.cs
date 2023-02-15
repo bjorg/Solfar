@@ -1,6 +1,6 @@
 ﻿/*
  * Solfar - Solfar Skylounge Automation
- * Copyright (C) 2020-2022 - Steve G. Bjorg
+ * Copyright (C) 2020-2023 - Steve G. Bjorg
  *
  * This program is free software: you can redistribute it and/or modify it
  * under the terms of the GNU Affero General Public License as published by the
