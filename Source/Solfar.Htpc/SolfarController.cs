@@ -82,6 +82,7 @@ public class SolfarController : AController {
         _radianceProClient.DisplayModeChanged += EventListener;
         _trinnovClient.AudioDecoderChanged += EventListener;
         _kaleidescapeClient.HighlightedSelectionChanged += EventListener;
+        _kaleidescapeClient.MovieLocationChanged += EventListener;
         _mediaCenterClient.PlaybackInfoChanged += EventListener;
 
         // initialize communication with devices
