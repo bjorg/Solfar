@@ -116,7 +116,10 @@ public class SolfarController : AController {
             ProcessAudioCodeChange(audioDecoderChangedEventArgs);
             break;
         case HighlightedSelectionChangedEventArgs highlightedSelectionChangedEventArgs:
-            ProcessHighlightedSelectionChange(highlightedSelectionChangedEventArgs);
+            ProcessKaleidescapeHighlightedSelectionChange(highlightedSelectionChangedEventArgs);
+            break;
+        case MovieLocationEventArgs movieLocationEventArgs:
+            ProcessKaleidescapeMovieLocationChange(movieLocationEventArgs);
             break;
         case MediaCenterPlaybackInfoChangedEventArgs mediaCenterPlaybackInfoChangedEventArgs:
             ProcessMediaCenterPlaybackInfoChange(mediaCenterPlaybackInfoChangedEventArgs);
@@ -289,7 +292,7 @@ public class SolfarController : AController {
             }
         });
 
-    private void ProcessHighlightedSelectionChange(HighlightedSelectionChangedEventArgs highlightedSelectionChangedEventArgs)
+    private void ProcessKaleidescapeHighlightedSelectionChange(HighlightedSelectionChangedEventArgs highlightedSelectionChangedEventArgs)
         => TriggerOnValueChanged("Show Kaleidescape Selection", highlightedSelectionChangedEventArgs.SelectionId, async selectionId => {
             var details = await _kaleidescapeClient.GetContentDetailsAsync(selectionId);
 
@@ -334,6 +337,11 @@ public class SolfarController : AController {
                 => rating.StartsWith("NR-", StringComparison.Ordinal)
                     ? rating.Substring(3)
                     : rating;
+        });
+
+    private void ProcessKaleidescapeMovieLocationChange(MovieLocationEventArgs movieLocationEventArgs)
+        => TriggerOnTrue("Kaleidescape End Credits", movieLocationEventArgs.Location == "05", async () => {
+            await _radianceProClient.ShowMessageCenteredAsync("--- The End ---", "", 3);
         });
 
     private void ProcessMediaCenterPlaybackInfoChange(MediaCenterPlaybackInfoChangedEventArgs mediaCenterPlaybackInfoChangedEventArgs)
