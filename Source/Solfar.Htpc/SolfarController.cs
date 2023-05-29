@@ -168,14 +168,11 @@ public class SolfarController : AController {
         });
 
         // select audio input
-        TriggerOnTrue("Switch to Lumagen Audio Output", !isHtpc2D && !isHtpc3D && !isKaleidescape && !isOppo, async () => {
+        TriggerOnTrue("Switch to Lumagen Audio Output", !isHtpc2D && !isHtpc3D && !isOppo, async () => {
             await _trinnovClient.SelectProfileAsync(TrinnovAltitudeProfile.Hdmi7);
         });
         TriggerOnTrue("Switch to HTPC Audio Output", isHtpc2D || isHtpc3D, async () => {
             await _trinnovClient.SelectProfileAsync(TrinnovAltitudeProfile.Hdmi6);
-        });
-        TriggerOnTrue("Switch to Kaleidescape Output", isKaleidescape, async () => {
-            await _trinnovClient.SelectProfileAsync(TrinnovAltitudeProfile.Hdmi5);
         });
         TriggerOnTrue("Switch to Oppo Output", isOppo, async () => {
 
