@@ -51,6 +51,7 @@ public class SolfarController : AController {
     private readonly MemoryCache _cache = new("TheMovieDB");
     private DateTimeOffset _lastSourceChange = DateTimeOffset.MinValue;
     private string _lastSource = "";
+    private bool _isKaleidescape;
 
     //--- Constructors ---
     public SolfarController(
@@ -143,7 +144,7 @@ public class SolfarController : AController {
         var isGui = radianceProDisplayMode.SourceVerticalRate == "050";
         var isOppo = radianceProDisplayMode.PhysicalInputSelected is 1;
         var isAppleTv = radianceProDisplayMode.PhysicalInputSelected is 3;
-        var isKaleidescape = radianceProDisplayMode.PhysicalInputSelected is 5;
+        _isKaleidescape = radianceProDisplayMode.PhysicalInputSelected is 5;
         var isNVidiaTV = radianceProDisplayMode.PhysicalInputSelected is 7;
         var isHtpc2D = radianceProDisplayMode.PhysicalInputSelected is 2;
         var isHtpc3D = radianceProDisplayMode.PhysicalInputSelected is 4;
@@ -291,6 +292,15 @@ public class SolfarController : AController {
 
     private void ProcessKaleidescapeHighlightedSelectionChange(HighlightedSelectionChangedEventArgs highlightedSelectionChangedEventArgs)
         => TriggerOnValueChanged("Show Kaleidescape Selection", highlightedSelectionChangedEventArgs.SelectionId, async selectionId => {
+
+            // check if event was received while Kaleidescape is not the active source
+            if(!_isKaleidescape) {
+                return;
+            }
+
+            // get details about current Kaleidescape selection
+
+            // TODO: when this fails, reset the K connection
             var details = await _kaleidescapeClient.GetContentDetailsAsync(selectionId);
 
             // "---------|---------|---------|"
@@ -309,8 +319,8 @@ public class SolfarController : AController {
                     try {
                         var timeoutCancellationTokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(3));
                         var searchResults = await _movieDbClient.SearchMovieAsync(details.Title, year: year, cancellationToken: timeoutCancellationTokenSource.Token);
-                    result = searchResults.Results.FirstOrDefault();
-                    _cache.Add(selectionId, result ?? new SearchMovie(), DateTimeOffset.UtcNow.AddHours(24));
+                        result = searchResults.Results.FirstOrDefault();
+                        _cache.Add(selectionId, result ?? new SearchMovie(), DateTimeOffset.UtcNow.AddHours(24));
                     } catch(TaskCanceledException) {
                         return;
                     } catch(OperationCanceledException) {
