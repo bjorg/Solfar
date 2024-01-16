@@ -154,7 +154,6 @@ public class SolfarController : AController {
         });
         TriggerOnTrue("Switch to Lumagen 3D", !isHtpc2D && !isHtpc3D && is3D, async () => {
             await _cledisClient.SetInputAsync(SonyCledisInput.Hdmi2);
-            await _cledisClient.SetPictureModeAsync(SonyCledisPictureMode.Mode3);
         });
         TriggerOnTrue("Switch to HTPC 2D", isHtpc2D, async () => {
             await _cledisClient.SetInputAsync(SonyCledisInput.DisplayPortBoth);
