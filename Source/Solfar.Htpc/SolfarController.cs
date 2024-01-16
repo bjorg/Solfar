@@ -298,19 +298,25 @@ public class SolfarController : AController {
             // "Score: 9.9 - 999 mins [PG-13] "
             // "---------|---------|---------|"
 
-            // compose movies votes line from TheMovieDB
+            // check if there is a title and year associated with the content
             string movieScore = "";
             if(!string.IsNullOrEmpty(details.Title) && int.TryParse(details.Year, out var year)) {
 
-                // find movie on TheMovieDB by title and year, if it's not in the cache already
+                // check if selection details are already cached
                 var result = (SearchMovie?)_cache[selectionId];
                 if(result is null) {
 
-                    // TODO: add timeout to search request
-                    var searchResults = await _movieDbClient.SearchMovieAsync(details.Title, year: year);
-
+                    // find movie on TheMovieDB by title and year
+                    try {
+                        var timeoutCancellationTokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+                        var searchResults = await _movieDbClient.SearchMovieAsync(details.Title, year: year, cancellationToken: timeoutCancellationTokenSource.Token);
                     result = searchResults.Results.FirstOrDefault();
                     _cache.Add(selectionId, result ?? new SearchMovie(), DateTimeOffset.UtcNow.AddHours(24));
+                    } catch(TaskCanceledException) {
+                        return;
+                    } catch(OperationCanceledException) {
+                        return;
+                    }
                 }
                 if(result?.Title is not null) {
 
