@@ -238,7 +238,7 @@ public class SolfarController : AController {
             switch(state.Decoder) {
             case "none":
             case "PCM":
-                decoder = "";
+                decoder = "PCM";
                 break;
             case "DD":
                 decoder = "Dolby";
