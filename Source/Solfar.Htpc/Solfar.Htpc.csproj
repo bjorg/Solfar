@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
   <PropertyGroup>
-    <TargetFramework>net6.0</TargetFramework>
+    <TargetFramework>net8.0</TargetFramework>
     <RootNamespace>Solfar.Htpc</RootNamespace>
     <NoWarn>CS1998</NoWarn>
     <Nullable>enable</Nullable>
