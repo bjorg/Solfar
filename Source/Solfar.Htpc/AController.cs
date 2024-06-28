@@ -63,6 +63,8 @@ namespace RadiantPi.Cortex {
 
         protected virtual void EventListener(object? sender, EventArgs args) {
             Logger?.LogTrace($"{nameof(EventListener)}: (Sender='{sender?.GetType().FullName ?? "<null>"}', Args='{args?.GetType().FullName ?? "<null>"}')");
+
+            // TODO: events with the same sender and event-args type should remove older occurrences
             _channel.Writer.TryWrite((Sender: sender, EventArgs: args!));
         }
 

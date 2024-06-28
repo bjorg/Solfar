@@ -279,8 +279,9 @@ public class SolfarController : AController {
             // show message
             if(decoder != "") {
 
+                // BUGBUGBUG (bjorg, 2024-06-28): this was commented out because it caused an error in parsing a simultaneous RadiancePro event (e.g. "!!xyz")
                 // clear menu in case it's shown
-                await _radianceProClient.SendAsync("!");
+                // await _radianceProClient.SendAsync("!");
 
                 // show decoder information with optional upmixer details
                 var message = (upmixer.Length > 0)
@@ -322,9 +323,11 @@ public class SolfarController : AController {
                         result = searchResults.Results.FirstOrDefault();
                         _cache.Add(selectionId, result ?? new SearchMovie(), DateTimeOffset.UtcNow.AddHours(24));
                     } catch(TaskCanceledException) {
-                        return;
+
+                        // ignore cancelation
                     } catch(OperationCanceledException) {
-                        return;
+
+                        // ignore cancelation
                     }
                 }
                 if(result?.Title is not null) {
@@ -338,9 +341,6 @@ public class SolfarController : AController {
             var movieInfo = string.IsNullOrEmpty(details.Rating)
                 ? $"{details.RunningTime} mins"
                 : $"{details.RunningTime} mins [{TrimNRPrefix(details.Rating)}]";
-
-            // clear menu in case it's shown
-            await _radianceProClient.SendAsync("!");
 
             // show combined lines
             await _radianceProClient.ShowMessageCenteredAsync(movieScore + movieInfo, "", 1);
