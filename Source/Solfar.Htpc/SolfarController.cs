@@ -23,6 +23,7 @@ using System.Runtime.Caching;
 using Microsoft.Extensions.Logging;
 using RadiantPi.Cortex;
 using RadiantPi.Kaleidescape;
+using RadiantPi.Kaleidescape.Model;
 using RadiantPi.Lumagen;
 using RadiantPi.Lumagen.Model;
 using RadiantPi.Sony.Cledis;
@@ -49,9 +50,11 @@ public class SolfarController : AController {
     private readonly HttpClient _httpClient;
     private readonly MediaCenterClient _mediaCenterClient;
     private readonly MemoryCache _cache = new("TheMovieDB");
+    private readonly MemoryCache _contentDetailsCache = new("Kaleidescape");
     private DateTimeOffset _lastSourceChange = DateTimeOffset.MinValue;
     private string _lastSource = "";
     private bool _isKaleidescape;
+    private DateTime _tmdbApiCooldown = DateTime.MinValue;
 
     //--- Constructors ---
     public SolfarController(
@@ -300,9 +303,13 @@ public class SolfarController : AController {
             }
 
             // get details about current Kaleidescape selection
+            ContentDetails details = (ContentDetails)_contentDetailsCache[selectionId];
+            if(details is null) {
 
-            // TODO: when this fails, reset the K connection
-            var details = await _kaleidescapeClient.GetContentDetailsAsync(selectionId);
+                // TODO: when this fails, reset the K connection
+                details = await _kaleidescapeClient.GetContentDetailsAsync(selectionId);
+                _contentDetailsCache[selectionId] = details;
+            }
 
             // "---------|---------|---------|"
             // "Score: 9.9 - 999 mins [PG-13] "
@@ -310,7 +317,11 @@ public class SolfarController : AController {
 
             // check if there is a title and year associated with the content
             string movieScore = "";
-            if(!string.IsNullOrEmpty(details.Title) && int.TryParse(details.Year, out var year)) {
+            if(
+                (_tmdbApiCooldown < DateTime.UtcNow) 
+                && !string.IsNullOrEmpty(details.Title) 
+                && int.TryParse(details.Year, out var year)
+            ) {
 
                 // check if selection details are already cached
                 var result = (SearchMovie?)_cache[selectionId];
@@ -324,10 +335,12 @@ public class SolfarController : AController {
                         _cache.Add(selectionId, result ?? new SearchMovie(), DateTimeOffset.UtcNow.AddHours(24));
                     } catch(TaskCanceledException) {
 
-                        // ignore cancelation
+                        // let TMDB API cooldown before atttempting to call it again
+                        _tmdbApiCooldown = DateTime.UtcNow.AddSeconds(60);
                     } catch(OperationCanceledException) {
 
-                        // ignore cancelation
+                        // let TMDB API cooldown before atttempting to call it again
+                        _tmdbApiCooldown = DateTime.UtcNow.AddSeconds(60);
                     }
                 }
                 if(result?.Title is not null) {
